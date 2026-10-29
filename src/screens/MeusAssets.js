@@ -14,7 +14,7 @@ import { SEM_PASTA, agruparPorPasta, gerarId, pastasDe } from '../utils/util';
 import { CabecalhoPasta } from '../components/CampoPasta';
 
 // "Meus assets": personagens (fichas), objetos, estruturas e mapas do próprio usuário
-export default function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
+export default function MeusAssets({ usuario, onVoltar, onAbrirPacks, onCriarMapa }) {
   const caminho = assetsDe(usuario.usuario);
   const [lista, setLista] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -58,6 +58,7 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
   function abrir(a) {
     if (a.tipo === 'personagem') setEditFicha(fichaDoAsset(a));
     else if (a.tipo === 'objeto') setEditObjeto(a);
+    else if (a.tipo === 'mapa' && (a.itens || []).some((i) => i.type === 'tiles') && onCriarMapa) onCriarMapa(a);
     else setRenomear(a);
   }
 
@@ -104,7 +105,9 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
               <Icone name={tipoAtual.icone} size={40} color={C.suave} />
               <Text style={s.vazio}>Nada em {tipoAtual.nome.toLowerCase()} ainda.</Text>
               <Text style={s.vazioSub}>
-                {aba === 'estrutura' || aba === 'mapa'
+                {aba === 'mapa'
+                  ? 'Crie no botão + (criador de mapas), salve a mesa pela aba Construir ou copie de um pack.'
+                  : aba === 'estrutura'
                   ? 'Monte na mesa e salve pela aba Construir, ou copie de um pack.'
                   : 'Crie no botão + ou copie de um pack.'}
               </Text>
@@ -136,6 +139,11 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
         </ScrollView>
       )}
 
+      {aba === 'mapa' && !!onCriarMapa && (
+        <TouchableOpacity style={s.fab} onPress={() => onCriarMapa(null)}>
+          <Icone name="map-plus" size={26} color="#fff" />
+        </TouchableOpacity>
+      )}
       {(aba === 'personagem' || aba === 'objeto') && (
         <TouchableOpacity
           style={s.fab}

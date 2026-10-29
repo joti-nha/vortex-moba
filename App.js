@@ -8,13 +8,14 @@ import Inicio from './src/screens/Inicio';
 import MeusAssets from './src/screens/MeusAssets';
 import { PacksUsuario, Postagens } from './src/screens/Packs';
 import Perfil from './src/screens/Perfil';
+import CriadorMapas from './src/screens/CriadorMapas';
 import { entrarAnonimo, garantirContaDev, registrarRecente, restaurarSessao, sair } from './src/services/auth';
 import { mesaDoLink } from './src/utils/link';
 
 export default function App() {
   const [usuario, setUsuario] = useState(null);
   const [iniciando, setIniciando] = useState(true);
-  const [tela, setTela] = useState({ nome: 'inicio' }); // inicio | meus | packs | postagens | perfil | mesa | acesso
+  const [tela, setTela] = useState({ nome: 'inicio' }); // inicio | meus | packs | postagens | perfil | mesa | acesso | mapas
   const [mesaPendente, setMesaPendente] = useState(null); // mesa a abrir depois de um login
 
   function abrirMesa(codigo, u) {
@@ -92,6 +93,7 @@ export default function App() {
           setMesaPendente(tela.codigo);
           setTela({ nome: 'acesso' });
         }}
+        onCriarMapa={() => setTela({ nome: 'mapas', de: 'mesa', codigo: tela.codigo })}
       />
     );
   } else if (tela.nome === 'meus') {
@@ -100,6 +102,16 @@ export default function App() {
         usuario={usuario}
         onVoltar={() => setTela({ nome: 'inicio' })}
         onAbrirPacks={() => setTela({ nome: 'packs', de: 'meus' })}
+        onCriarMapa={(asset) => setTela({ nome: 'mapas', asset, de: 'meus' })}
+      />
+    );
+  } else if (tela.nome === 'mapas') {
+    conteudo = (
+      <CriadorMapas
+        key={(tela.asset && tela.asset.id) || 'novo'}
+        usuario={usuario}
+        asset={tela.asset}
+        onVoltar={() => setTela(tela.de === 'mesa' ? { nome: 'mesa', codigo: tela.codigo } : { nome: tela.de || 'inicio' })}
       />
     );
   } else if (tela.nome === 'packs') {
@@ -118,6 +130,7 @@ export default function App() {
         onMeusAssets={() => setTela({ nome: 'meus' })}
         onPacks={(aba) => setTela({ nome: 'packs', aba })}
         onPostagens={(aba) => setTela({ nome: 'postagens', aba })}
+        onCriarMapa={() => setTela({ nome: 'mapas' })}
         onPerfil={() => setTela({ nome: 'perfil' })}
         onEntrarConta={() => setTela({ nome: 'acesso' })}
       />

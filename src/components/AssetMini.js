@@ -4,11 +4,24 @@ import { MaterialCommunityIcons as Icone } from '@expo/vector-icons';
 import { TokenMini } from './Ficha';
 import { C } from '../config/theme';
 import { useImagem } from '../services/imagens';
+import Svg from 'react-native-svg';
+import { MapaTilesSvg } from './MapaTiles';
 
 // ---------- miniatura de qualquer asset ----------
 export function AssetMini({ asset, tamanho = 46 }) {
   const src = useImagem(asset.tipo === 'objeto' || asset.tipo === 'mapa' ? asset.img : '');
   if (asset.tipo === 'personagem') return <TokenMini item={asset} tamanho={tamanho} />;
+  const tiles = asset.tipo === 'mapa' && !asset.img && (asset.itens || []).find((i) => i.type === 'tiles');
+  if (tiles) {
+    const cel = tamanho / Math.max(tiles.cols || 1, tiles.rows || 1);
+    return (
+      <View style={{ width: tamanho, height: tamanho, borderRadius: 10, overflow: 'hidden', backgroundColor: C.painel2, alignItems: 'center', justifyContent: 'center' }}>
+        <Svg width={(tiles.cols || 1) * cel} height={(tiles.rows || 1) * cel}>
+          <MapaTilesSvg linhas={tiles.linhas} cel={cel} tema={tiles.tema} mostrarGrade={false} />
+        </Svg>
+      </View>
+    );
+  }
   const caixaMini = {
     width: tamanho,
     height: tamanho,

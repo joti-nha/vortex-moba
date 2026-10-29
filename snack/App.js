@@ -1,5 +1,5 @@
 // MESA VORTEX — arquivo único gerado por scripts/arquivo-unico.js (não edite aqui; edite em src/)
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, G, Rect, Line, Image as SvgImage, Text as SvgText, ClipPath } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -1061,12 +1061,369 @@ const estFicha = StyleSheet.create({
 });
 
 // ================================================================
+// src/utils/masmorra.js
+// ================================================================
+// Mapas em células (estilo "dungeon maker").
+// Cada célula é um caractere:
+//   '.' vazio (rocha)   '#' chão   '~' água   ',' terra   '^' lava   'D' porta   'S' escada
+// Tudo que não é '.' conta como piso (as paredes são desenhadas na borda entre piso e vazio).
+
+const VAZIO = '.';
+const TERRENOS = [
+  { id: '#', nome: 'Chão', icone: 'square' },
+  { id: ',', nome: 'Terra', icone: 'grass' },
+  { id: '~', nome: 'Água', icone: 'water' },
+  { id: '^', nome: 'Lava', icone: 'fire' },
+];
+const ehPiso = (c) => !!c && c !== VAZIO;
+
+// gerador pseudoaleatório com semente (mesma semente = mesmo mapa)
+function aleatorio(semente) {
+  let a = semente >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const entre = (r, min, max) => min + Math.floor(r() * (max - min + 1));
+
+const gradeVazia = (cols, rows) => Array.from({ length: rows }, () => Array(cols).fill(VAZIO));
+const paraLinhas = (g) => g.map((l) => l.join(''));
+const deLinhas = (linhas) => linhas.map((l) => l.split(''));
+const copiarGrade = (g) => g.map((l) => l.slice());
+
+function preencherRet(g, x0, y0, x1, y1, c) {
+  const rows = g.length;
+  const cols = g[0].length;
+  for (let y = Math.max(0, Math.min(y0, y1)); y <= Math.min(rows - 1, Math.max(y0, y1)); y++)
+    for (let x = Math.max(0, Math.min(x0, x1)); x <= Math.min(cols - 1, Math.max(x0, x1)); x++) g[y][x] = c;
+}
+
+function pintar(g, cx, cy, raio, c) {
+  preencherRet(g, cx - raio, cy - raio, cx + raio, cy + raio, c);
+}
+
+// ---------- gerador: masmorra (salas + corredores) ----------
+function gerarMasmorra(cols, rows, semente, { salas = 9, portas = true } = {}) {
+  const r = aleatorio(semente);
+  const g = gradeVazia(cols, rows);
+  const lista = [];
+  for (let t = 0; t < 400 && lista.length < salas; t++) {
+    const w = entre(r, 4, Math.max(4, Math.min(10, Math.floor(cols / 3))));
+    const h = entre(r, 3, Math.max(3, Math.min(8, Math.floor(rows / 3))));
+    const x = entre(r, 1, cols - w - 2);
+    const y = entre(r, 1, rows - h - 2);
+    if (x < 1 || y < 1) continue;
+    const sobrepoe = lista.some((s) => x <= s.x + s.w + 1 && x + w + 1 >= s.x && y <= s.y + s.h + 1 && y + h + 1 >= s.y);
+    if (sobrepoe) continue;
+    lista.push({ x, y, w, h, cx: x + Math.floor(w / 2), cy: y + Math.floor(h / 2) });
+  }
+  lista.sort((a, b) => a.cx - b.cx);
+  lista.forEach((s) => preencherRet(g, s.x, s.y, s.x + s.w - 1, s.y + s.h - 1, '#'));
+
+  const dentroDeSala = (x, y) => lista.some((s) => x >= s.x && x < s.x + s.w && y >= s.y && y < s.y + s.h);
+  const corredor = (a, b) => {
+    const cavar = (x, y) => {
+      if (g[y][x] === VAZIO) g[y][x] = '#';
+    };
+    if (r() < 0.5) {
+      for (let x = Math.min(a.cx, b.cx); x <= Math.max(a.cx, b.cx); x++) cavar(x, a.cy);
+      for (let y = Math.min(a.cy, b.cy); y <= Math.max(a.cy, b.cy); y++) cavar(b.cx, y);
+    } else {
+      for (let y = Math.min(a.cy, b.cy); y <= Math.max(a.cy, b.cy); y++) cavar(a.cx, y);
+      for (let x = Math.min(a.cx, b.cx); x <= Math.max(a.cx, b.cx); x++) cavar(x, b.cy);
+    }
+  };
+  for (let i = 1; i < lista.length; i++) corredor(lista[i - 1], lista[i]);
+  for (let k = 0; k < Math.floor(lista.length / 3); k++) {
+    const a = lista[entre(r, 0, lista.length - 1)];
+    const b = lista[entre(r, 0, lista.length - 1)];
+    if (a !== b) corredor(a, b);
+  }
+
+  // portas: piso de corredor encostado na sala, com paredes dos dois lados
+  if (portas) {
+    for (let y = 1; y < rows - 1; y++)
+      for (let x = 1; x < cols - 1; x++) {
+        if (g[y][x] !== '#' || dentroDeSala(x, y)) continue;
+        const horiz = g[y][x - 1] === VAZIO && g[y][x + 1] === VAZIO && (dentroDeSala(x, y - 1) || dentroDeSala(x, y + 1));
+        const vert = g[y - 1][x] === VAZIO && g[y + 1][x] === VAZIO && (dentroDeSala(x - 1, y) || dentroDeSala(x + 1, y));
+        if ((horiz || vert) && r() < 0.7) g[y][x] = 'D';
+      }
+  }
+  if (lista.length) {
+    g[lista[0].cy][lista[0].cx] = 'S';
+    const u = lista[lista.length - 1];
+    g[u.cy][u.cx] = 'S';
+  }
+  return g;
+}
+
+// ---------- gerador: caverna (autômato celular) ----------
+function gerarCaverna(cols, rows, semente, opcoes = {}) {
+  // tenta de novo (com semente derivada) se a caverna sair pequena demais
+  for (let t = 0; t < 6; t++) {
+    const g = cavernaUmaVez(cols, rows, semente + t * 7919, opcoes);
+    const piso = g.reduce((n, l) => n + l.filter((c) => c !== VAZIO).length, 0);
+    if (piso >= cols * rows * 0.35 || t === 5) return g;
+  }
+}
+
+function cavernaUmaVez(cols, rows, semente, { densidade = 0.4, agua = true } = {}) {
+  const r = aleatorio(semente);
+  let g = gradeVazia(cols, rows);
+  for (let y = 1; y < rows - 1; y++) for (let x = 1; x < cols - 1; x++) g[y][x] = r() < densidade ? VAZIO : '#';
+  const vizinhosVazios = (gg, x, y) => {
+    let n = 0;
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const yy = y + dy;
+        const xx = x + dx;
+        if (yy < 0 || xx < 0 || yy >= rows || xx >= cols || gg[yy][xx] === VAZIO) n++;
+      }
+    return n;
+  };
+  for (let it = 0; it < 5; it++) {
+    const n = gradeVazia(cols, rows);
+    for (let y = 1; y < rows - 1; y++)
+      for (let x = 1; x < cols - 1; x++) {
+        const v = vizinhosVazios(g, x, y);
+        n[y][x] = v > 4 ? VAZIO : v < 4 ? '#' : g[y][x];
+      }
+    g = n;
+  }
+  // mantém só a maior região conectada
+  const marca = gradeVazia(cols, rows).map((l) => l.map(() => 0));
+  let melhor = [];
+  for (let y = 0; y < rows; y++)
+    for (let x = 0; x < cols; x++) {
+      if (g[y][x] === VAZIO || marca[y][x]) continue;
+      const regiao = [];
+      const pilha = [[x, y]];
+      marca[y][x] = 1;
+      while (pilha.length) {
+        const [px, py] = pilha.pop();
+        regiao.push([px, py]);
+        [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => {
+          const nx = px + dx;
+          const ny = py + dy;
+          if (nx >= 0 && ny >= 0 && nx < cols && ny < rows && !marca[ny][nx] && g[ny][nx] !== VAZIO) {
+            marca[ny][nx] = 1;
+            pilha.push([nx, ny]);
+          }
+        });
+      }
+      if (regiao.length > melhor.length) melhor = regiao;
+    }
+  const final = gradeVazia(cols, rows);
+  melhor.forEach(([x, y]) => (final[y][x] = '#'));
+  // poças d'água
+  if (agua && melhor.length) {
+    for (let p = 0; p < entre(r, 1, 3); p++) {
+      let [x, y] = melhor[entre(r, 0, melhor.length - 1)];
+      for (let passo = 0; passo < entre(r, 15, 45); passo++) {
+        if (final[y] && final[y][x] && final[y][x] !== VAZIO) final[y][x] = '~';
+        const [dx, dy] = [[1, 0], [-1, 0], [0, 1], [0, -1]][entre(r, 0, 3)];
+        if (final[y + dy] && final[y + dy][x + dx] && final[y + dy][x + dx] !== VAZIO) {
+          x += dx;
+          y += dy;
+        }
+      }
+    }
+  }
+  return final;
+}
+
+// ---------- gerador: labirinto (backtracking) ----------
+function gerarLabirinto(cols, rows, semente) {
+  const r = aleatorio(semente);
+  const g = gradeVazia(cols, rows);
+  const W = Math.floor((cols - 1) / 2);
+  const H = Math.floor((rows - 1) / 2);
+  if (W < 1 || H < 1) return g;
+  const visit = Array.from({ length: H }, () => Array(W).fill(false));
+  const pilha = [[0, 0]];
+  visit[0][0] = true;
+  g[1][1] = '#';
+  while (pilha.length) {
+    const [cx, cy] = pilha[pilha.length - 1];
+    const op = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => {
+      const nx = cx + dx;
+      const ny = cy + dy;
+      return nx >= 0 && ny >= 0 && nx < W && ny < H && !visit[ny][nx];
+    });
+    if (!op.length) {
+      pilha.pop();
+      continue;
+    }
+    const [dx, dy] = op[entre(r, 0, op.length - 1)];
+    const nx = cx + dx;
+    const ny = cy + dy;
+    visit[ny][nx] = true;
+    g[1 + cy * 2 + dy][1 + cx * 2 + dx] = '#';
+    g[1 + ny * 2][1 + nx * 2] = '#';
+    pilha.push([nx, ny]);
+  }
+  g[1][1] = 'S';
+  g[1 + (H - 1) * 2][1 + (W - 1) * 2] = 'S';
+  return g;
+}
+
+const GERADORES = [
+  { id: 'masmorra', nome: 'Masmorra', icone: 'castle', gerar: gerarMasmorra },
+  { id: 'caverna', nome: 'Caverna', icone: 'terrain', gerar: gerarCaverna },
+  { id: 'labirinto', nome: 'Labirinto', icone: 'puzzle-outline', gerar: gerarLabirinto },
+];
+
+// ================================================================
+// src/components/MapaTiles.js
+// ================================================================
+// Desenha um mapa de células (criador de mapas) dentro de um <Svg>:
+// piso por terreno, paredes automáticas com sombra, grade no chão, portas e escadas.
+
+const TEMAS_MAPA = {
+  pedra: { nome: 'Pedra', fundo: '#24212c', chao: '#d6cfc0', parede: '#0d0b12', sombra: '#000000', grade: '#000000', gradeOp: 0.12 },
+  pergaminho: { nome: 'Pergaminho', fundo: '#e9dcc1', chao: '#fffaf0', parede: '#2d2418', sombra: '#7a6648', grade: '#2d2418', gradeOp: 0.15 },
+  caverna: { nome: 'Caverna', fundo: '#1b1712', chao: '#8b7a60', parede: '#0b0907', sombra: '#000000', grade: '#000000', gradeOp: 0.12 },
+  floresta: { nome: 'Floresta', fundo: '#24391f', chao: '#b49a68', parede: '#142012', sombra: '#000000', grade: '#000000', gradeOp: 0.1 },
+  scifi: { nome: 'Sci-fi', fundo: '#060912', chao: '#1d2740', parede: '#22d3ee', sombra: '#22d3ee', grade: '#22d3ee', gradeOp: 0.18 },
+};
+const COR_TERRENO = { ',': '#9a7b4f', '~': '#3b82f6', '^': '#ef4444' };
+
+// junta segmentos colineares: mapa linha -> lista de [inicio, fim]
+function juntar(segs) {
+  const out = [];
+  Object.keys(segs).forEach((k) => {
+    const l = segs[k].sort((a, b) => a - b);
+    let ini = l[0];
+    let fim = l[0] + 1;
+    for (let i = 1; i < l.length; i++) {
+      if (l[i] === fim) fim++;
+      else {
+        out.push([Number(k), ini, fim]);
+        ini = l[i];
+        fim = l[i] + 1;
+      }
+    }
+    if (l.length) out.push([Number(k), ini, fim]);
+  });
+  return out;
+}
+
+function calcularDesenho(linhas, cel) {
+  const rows = linhas.length;
+  const cols = rows ? linhas[0].length : 0;
+  const at = (x, y) => (y < 0 || x < 0 || y >= rows || x >= cols ? VAZIO : linhas[y][x]);
+  const pisos = {}; // cor -> d
+  const paredeH = {};
+  const paredeV = {};
+  const gradeH = {};
+  const gradeV = {};
+  const portas = [];
+  const escadas = [];
+
+  for (let y = 0; y < rows; y++) {
+    // piso em "corridas" horizontais de mesma cor
+    let x = 0;
+    while (x < cols) {
+      const c = linhas[y][x];
+      if (!ehPiso(c)) {
+        x++;
+        continue;
+      }
+      const chaveDe = (ch) => (COR_TERRENO[ch] ? ch : 'chao');
+      const chave = chaveDe(c);
+      let fim = x + 1;
+      while (fim < cols && ehPiso(linhas[y][fim]) && chaveDe(linhas[y][fim]) === chave) fim++;
+      pisos[chave] = (pisos[chave] || '') + `M${x * cel} ${y * cel}h${(fim - x) * cel}v${cel}h${-(fim - x) * cel}z`;
+      x = fim;
+    }
+    for (let xx = 0; xx < cols; xx++) {
+      const c = linhas[y][xx];
+      if (!ehPiso(c)) continue;
+      if (c === 'D') portas.push([xx, y, !ehPiso(at(xx - 1, y)) && !ehPiso(at(xx + 1, y))]);
+      if (c === 'S') escadas.push([xx, y]);
+      // bordas: parede se o vizinho não é piso; linha de grade se é piso
+      if (!ehPiso(at(xx, y - 1))) (paredeH[y] = paredeH[y] || []).push(xx);
+      else (gradeH[y] = gradeH[y] || []).push(xx);
+      if (!ehPiso(at(xx, y + 1))) (paredeH[y + 1] = paredeH[y + 1] || []).push(xx);
+      if (!ehPiso(at(xx - 1, y))) (paredeV[xx] = paredeV[xx] || []).push(y);
+      else (gradeV[xx] = gradeV[xx] || []).push(y);
+      if (!ehPiso(at(xx + 1, y))) (paredeV[xx + 1] = paredeV[xx + 1] || []).push(y);
+    }
+  }
+  const linhasH = (m) => juntar(m).map(([y, a, b]) => `M${a * cel} ${y * cel}H${b * cel}`).join('');
+  const linhasV = (m) => juntar(m).map(([x, a, b]) => `M${x * cel} ${a * cel}V${b * cel}`).join('');
+  return {
+    largura: cols * cel,
+    altura: rows * cel,
+    pisos,
+    paredes: linhasH(paredeH) + linhasV(paredeV),
+    grade: linhasH(gradeH) + linhasV(gradeV),
+    portas,
+    escadas,
+  };
+}
+
+function MapaTilesSvg({ linhas, cel, tema = 'pedra', mostrarGrade = true, x = 0, y = 0 }) {
+  const t = TEMAS_MAPA[tema] || TEMAS_MAPA.pedra;
+  const chave = (linhas || []).join('|');
+  const d = useMemo(() => calcularDesenho(linhas || [], cel), [chave, cel]);
+  const esp = cel * 0.14;
+  return (
+    <G transform={x || y ? `translate(${x} ${y})` : undefined}>
+      <Rect x={0} y={0} width={d.largura} height={d.altura} fill={t.fundo} />
+      {Object.keys(d.pisos).map((k) => (
+        <Path key={k} d={d.pisos[k]} fill={k === 'chao' ? t.chao : COR_TERRENO[k]} />
+      ))}
+      {mostrarGrade && !!d.grade && <Path d={d.grade} stroke={t.grade} strokeOpacity={t.gradeOp} strokeWidth={Math.max(0.5, cel * 0.02)} fill="none" />}
+      {!!d.paredes && <Path d={d.paredes} stroke={t.sombra} strokeOpacity={0.3} strokeWidth={esp * 2.6} strokeLinecap="square" fill="none" />}
+      {!!d.paredes && <Path d={d.paredes} stroke={t.parede} strokeWidth={esp} strokeLinecap="square" fill="none" />}
+      {d.portas.map(([px, py, vertical]) => (
+        <Rect
+          key={`p${px}_${py}`}
+          x={px * cel + (vertical ? cel * 0.1 : cel * 0.38)}
+          y={py * cel + (vertical ? cel * 0.38 : cel * 0.1)}
+          width={vertical ? cel * 0.8 : cel * 0.24}
+          height={vertical ? cel * 0.24 : cel * 0.8}
+          fill="#8b5a2b"
+          stroke={t.parede}
+          strokeWidth={esp * 0.5}
+        />
+      ))}
+      {d.escadas.map(([sx, sy]) => (
+        <Path
+          key={`s${sx}_${sy}`}
+          d={[0.2, 0.4, 0.6, 0.8].map((f) => `M${sx * cel + cel * 0.15} ${sy * cel + cel * f}H${sx * cel + cel * 0.85}`).join('')}
+          stroke={t.parede}
+          strokeWidth={esp * 0.6}
+        />
+      ))}
+    </G>
+  );
+}
+
+// ================================================================
 // src/components/AssetMini.js
 // ================================================================
 // ---------- miniatura de qualquer asset ----------
 function AssetMini({ asset, tamanho = 46 }) {
   const src = useImagem(asset.tipo === 'objeto' || asset.tipo === 'mapa' ? asset.img : '');
   if (asset.tipo === 'personagem') return <TokenMini item={asset} tamanho={tamanho} />;
+  const tiles = asset.tipo === 'mapa' && !asset.img && (asset.itens || []).find((i) => i.type === 'tiles');
+  if (tiles) {
+    const cel = tamanho / Math.max(tiles.cols || 1, tiles.rows || 1);
+    return (
+      <View style={{ width: tamanho, height: tamanho, borderRadius: 10, overflow: 'hidden', backgroundColor: C.painel2, alignItems: 'center', justifyContent: 'center' }}>
+        <Svg width={(tiles.cols || 1) * cel} height={(tiles.rows || 1) * cel}>
+          <MapaTilesSvg linhas={tiles.linhas} cel={cel} tema={tiles.tema} mostrarGrade={false} />
+        </Svg>
+      </View>
+    );
+  }
   const caixaMini = {
     width: tamanho,
     height: tamanho,
@@ -1931,6 +2288,8 @@ function Item({ it, escala }) {
   switch (it.type) {
     case 'token':
       return <TokenItem it={it} escala={escala} />;
+    case 'tiles':
+      return <MapaTilesSvg linhas={it.linhas} cel={it.cel || 70} tema={it.tema} mostrarGrade={it.mostrarGrade !== false} x={it.x} y={it.y} />;
     case 'prop':
       return <PropItem it={it} />;
     case 'rect':
@@ -2731,7 +3090,7 @@ const DICA_FERRAMENTA = {
   capturar: 'Arraste um retângulo sobre os itens que formam a estrutura.',
 };
 
-function Mesa({ codigo, usuario, onSair, onEntrarConta }) {
+function Mesa({ codigo, usuario, onSair, onEntrarConta, onCriarMapa }) {
   const visitante = usuario.provedor === 'anonimo';
   const base = `${COL.mesas}/${codigo}`;
   const nome = usuario.nome;
@@ -3286,9 +3645,15 @@ function Mesa({ codigo, usuario, onSair, onEntrarConta }) {
             <Text style={[estMesa.btnGrandeTxt, ferramenta === 'capturar' && { color: '#fff' }]}>Capturar estrutura</Text>
           </TouchableOpacity>
           <TouchableOpacity style={estMesa.btnGrande} onPress={() => setSalvandoMapa(true)}>
-            <Icone name="map-plus" size={20} color={C.destaque2} />
+            <Icone name="content-save-outline" size={20} color={C.destaque2} />
             <Text style={estMesa.btnGrandeTxt}>Salvar mesa como mapa</Text>
           </TouchableOpacity>
+          {!!onCriarMapa && (
+            <TouchableOpacity style={estMesa.btnGrande} onPress={onCriarMapa}>
+              <Icone name="map-plus" size={20} color={C.destaque2} />
+              <Text style={estMesa.btnGrandeTxt}>Criador de mapas</Text>
+            </TouchableOpacity>
+          )}
           <Text style={[estMesa.dica, { maxWidth: 260 }]}>
             Monte com objetos, desenhos e formas; depois capture a área como estrutura ou salve a mesa inteira. Tudo vai para Meus assets e fica na aba Assets.
           </Text>
@@ -4102,7 +4467,7 @@ const estAcesso = StyleSheet.create({
 const CAMADAS_PADRAO = ['Cenário', 'Desenhos', 'Tokens'];
 
 // Tela de ações: campanhas do usuário + atalhos (assets, packs, meus dados, postagens do admin)
-function Inicio({ usuario, onAbrirMesa, onMeusAssets, onPacks, onPostagens, onPerfil, onEntrarConta }) {
+function Inicio({ usuario, onAbrirMesa, onMeusAssets, onPacks, onPostagens, onPerfil, onEntrarConta, onCriarMapa }) {
   const admin = usuario.papel === 'admin';
   const [codigo, setCodigo] = useState('');
   const [nomeMesa, setNomeMesa] = useState('');
@@ -4277,6 +4642,7 @@ function Inicio({ usuario, onAbrirMesa, onMeusAssets, onPacks, onPostagens, onPe
           {[
             { rot: 'Meus assets', sub: 'fichas, objetos, mapas', icone: 'treasure-chest', cor: C.destaque, acao: onMeusAssets },
             { rot: 'Packs', sub: 'usar e criar packs', icone: 'package-variant', cor: C.destaque2, acao: () => onPacks() },
+            { rot: 'Criar mapa', sub: 'masmorras e cavernas', icone: 'map-plus', cor: '#22c55e', acao: onCriarMapa },
             { rot: 'Meus dados', sub: 'perfil e conta', icone: 'account-details-outline', cor: '#f59e0b', acao: onPerfil },
             ...(admin
               ? [{ rot: 'Postagens', sub: pedidosPendentes ? `${pedidosPendentes} pedido(s)` : 'packs oficiais', icone: 'shield-crown-outline', cor: '#ef4444', acao: () => onPostagens(pedidosPendentes ? 'pendentes' : 'oficiais'), badge: pedidosPendentes }]
@@ -5750,7 +6116,7 @@ const estPacks = StyleSheet.create({
 // src/screens/MeusAssets.js
 // ================================================================
 // "Meus assets": personagens (fichas), objetos, estruturas e mapas do próprio usuário
-function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
+function MeusAssets({ usuario, onVoltar, onAbrirPacks, onCriarMapa }) {
   const caminho = assetsDe(usuario.usuario);
   const [lista, setLista] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -5794,6 +6160,7 @@ function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
   function abrir(a) {
     if (a.tipo === 'personagem') setEditFicha(fichaDoAsset(a));
     else if (a.tipo === 'objeto') setEditObjeto(a);
+    else if (a.tipo === 'mapa' && (a.itens || []).some((i) => i.type === 'tiles') && onCriarMapa) onCriarMapa(a);
     else setRenomear(a);
   }
 
@@ -5840,7 +6207,9 @@ function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
               <Icone name={tipoAtual.icone} size={40} color={C.suave} />
               <Text style={estMeusAssets.vazio}>Nada em {tipoAtual.nome.toLowerCase()} ainda.</Text>
               <Text style={estMeusAssets.vazioSub}>
-                {aba === 'estrutura' || aba === 'mapa'
+                {aba === 'mapa'
+                  ? 'Crie no botão + (criador de mapas), salve a mesa pela aba Construir ou copie de um pack.'
+                  : aba === 'estrutura'
                   ? 'Monte na mesa e salve pela aba Construir, ou copie de um pack.'
                   : 'Crie no botão + ou copie de um pack.'}
               </Text>
@@ -5872,6 +6241,11 @@ function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
         </ScrollView>
       )}
 
+      {aba === 'mapa' && !!onCriarMapa && (
+        <TouchableOpacity style={estMeusAssets.fab} onPress={() => onCriarMapa(null)}>
+          <Icone name="map-plus" size={26} color="#fff" />
+        </TouchableOpacity>
+      )}
       {(aba === 'personagem' || aba === 'objeto') && (
         <TouchableOpacity
           style={estMeusAssets.fab}
@@ -6189,12 +6563,553 @@ const estPerfil = StyleSheet.create({
 });
 
 // ================================================================
+// src/screens/CriadorMapas.js
+// ================================================================
+// Criador de mapas (estilo "dungeon maker"): gere masmorras, cavernas e labirintos,
+// pinte salas, terrenos, portas e escadas, escolha o tema e salve em Meus assets › Mapas.
+
+const CEL_MUNDO = 70; // tamanho da célula quando o mapa vai para a mesa
+const TAMANHOS = [
+  [20, 15],
+  [30, 20],
+  [40, 30],
+  [60, 40],
+];
+const FERRAMENTAS_MAPA = [
+  { id: 'pincel', nome: 'Pincel', icone: 'brush' },
+  { id: 'sala', nome: 'Sala', icone: 'vector-square' },
+  { id: 'borracha', nome: 'Borracha', icone: 'eraser' },
+  { id: 'porta', nome: 'Porta', icone: 'door' },
+  { id: 'escada', nome: 'Escada', icone: 'stairs' },
+  { id: 'mover', nome: 'Mover', icone: 'hand-back-right-outline' },
+];
+const novaSemente = () => Math.floor(Math.random() * 1e9);
+
+function CriadorMapas({ usuario, asset, onVoltar }) {
+  // mapa existente (edição) ou novo
+  const tilesOrig = asset && (asset.itens || []).find((i) => i.type === 'tiles');
+  const g = useRef(tilesOrig ? deLinhas(tilesOrig.linhas) : null);
+  const [cols, setCols] = useState(tilesOrig ? tilesOrig.cols : 30);
+  const [rows, setRows] = useState(tilesOrig ? tilesOrig.rows : 20);
+  const [versao, setVersao] = useState(0);
+  const historico = useRef([]);
+
+  const [nome, setNome] = useState(asset ? asset.nome : '');
+  const [tema, setTema] = useState(tilesOrig ? tilesOrig.tema : 'pedra');
+  const [mostrarGrade, setMostrarGrade] = useState(tilesOrig ? tilesOrig.mostrarGrade !== false : true);
+  const [aba, setAba] = useState(tilesOrig ? 'pintar' : 'gerar');
+  const [gerador, setGerador] = useState((asset && asset.gerador && asset.gerador.tipo) || 'masmorra');
+  const [semente, setSemente] = useState((asset && asset.gerador && asset.gerador.semente) || novaSemente());
+  const [salas, setSalas] = useState(9);
+  const [agua, setAgua] = useState(true);
+  const [ferramenta, setFerramenta] = useState('pincel');
+  const [terreno, setTerreno] = useState('#');
+  const [raio, setRaio] = useState(0);
+  const [view, setView] = useState({ x: 10, y: 10, s: 16 });
+  const [area, setArea] = useState({ w: 0, h: 0 });
+  const [previa, setPreviaEstado] = useState(null);
+  const previaRef = useRef(null);
+  const setPrevia = (v) => {
+    previaRef.current = v;
+    setPreviaEstado(v);
+  };
+  const [msg, setMsg] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [idSalvo, setIdSalvo] = useState(asset ? asset.id : null);
+
+  if (!g.current) g.current = GERADORES[0].gerar(30, 20, semente, { salas: 9 });
+
+  const linhas = useMemo(() => paraLinhas(g.current), [versao]);
+  const avisar = (t) => {
+    setMsg(t);
+    setTimeout(() => setMsg((m) => (m === t ? '' : m)), 2500);
+  };
+
+  // ---------- histórico ----------
+  function guardar() {
+    historico.current.push(paraLinhas(g.current));
+    if (historico.current.length > 40) historico.current.shift();
+  }
+  function desfazer() {
+    const ant = historico.current.pop();
+    if (!ant) return avisar('Nada para desfazer');
+    g.current = deLinhas(ant);
+    setRows(ant.length);
+    setCols(ant[0].length);
+    setVersao((v) => v + 1);
+  }
+
+  // ---------- geração ----------
+  function gerar(c = cols, r = rows, sem = semente) {
+    guardar();
+    const gen = GERADORES.find((x) => x.id === gerador);
+    g.current = gen.gerar(c, r, sem, { salas, agua });
+    setCols(c);
+    setRows(r);
+    setVersao((v) => v + 1);
+    ajustar(c, r);
+  }
+
+  function redimensionar(c, r) {
+    guardar();
+    const novo = gradeVazia(c, r);
+    for (let y = 0; y < Math.min(r, rows); y++) for (let x = 0; x < Math.min(c, cols); x++) novo[y][x] = g.current[y][x];
+    g.current = novo;
+    setCols(c);
+    setRows(r);
+    setVersao((v) => v + 1);
+    ajustar(c, r);
+  }
+
+  function limpar() {
+    guardar();
+    g.current = gradeVazia(cols, rows);
+    setVersao((v) => v + 1);
+  }
+
+  // ---------- vista ----------
+  function ajustar(c = cols, r = rows, a = area) {
+    if (!a.w) return;
+    const s = Math.max(4, Math.min((a.w - 20) / c, (a.h - 20) / r));
+    setView({ s, x: (a.w - c * s) / 2, y: (a.h - r * s) / 2 });
+  }
+  function zoom(f) {
+    setView((v) => {
+      const s = limitar(v.s * f, 4, 80);
+      const cx = area.w / 2;
+      const cy = area.h / 2;
+      return { s, x: cx - ((cx - v.x) / v.s) * s, y: cy - ((cy - v.y) / v.s) * s };
+    });
+  }
+
+  // ---------- gestos de pintura ----------
+  const E = useRef({});
+  E.current = { view, ferramenta, terreno, raio, cols, rows };
+  const caixaRef = useRef(null);
+  const origem = useRef({ x: 0, y: 0 });
+  const gesto = useRef({});
+
+  const celulaDe = (pageX, pageY) => {
+    const v = E.current.view;
+    return {
+      x: Math.floor((pageX - origem.current.x - v.x) / v.s),
+      y: Math.floor((pageY - origem.current.y - v.y) / v.s),
+    };
+  };
+  const dentro = (c) => c.x >= 0 && c.y >= 0 && c.x < E.current.cols && c.y < E.current.rows;
+
+  function aplicar(c) {
+    const { ferramenta: f, terreno: t, raio: r } = E.current;
+    if (!dentro(c)) return;
+    if (f === 'pincel') pintar(g.current, c.x, c.y, r, t);
+    if (f === 'borracha') pintar(g.current, c.x, c.y, r, VAZIO);
+    setVersao((v) => v + 1);
+  }
+
+  function linhaAte(a, b) {
+    const passos = Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y), 1);
+    for (let i = 1; i <= passos; i++) {
+      aplicar({ x: Math.round(a.x + ((b.x - a.x) * i) / passos), y: Math.round(a.y + ((b.y - a.y) * i) / passos) });
+    }
+  }
+
+  const resp = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (e) => {
+        const ne = e.nativeEvent;
+        if (ne.locationX !== undefined) origem.current = { x: ne.pageX - ne.locationX, y: ne.pageY - ne.locationY };
+        const f = E.current.ferramenta;
+        const c = celulaDe(e.nativeEvent.pageX, e.nativeEvent.pageY);
+        gesto.current = { ultima: c, view0: E.current.view, inicio: c };
+        if (f === 'mover') return;
+        if (f === 'sala') {
+          setPrevia({ a: c, b: c });
+          return;
+        }
+        if (f === 'porta' || f === 'escada') {
+          if (!dentro(c)) return;
+          guardar();
+          const atual = g.current[c.y][c.x];
+          const marca = f === 'porta' ? 'D' : 'S';
+          g.current[c.y][c.x] = atual === marca ? '#' : marca;
+          setVersao((v) => v + 1);
+          return;
+        }
+        guardar();
+        aplicar(c);
+      },
+      onPanResponderMove: (e, gs) => {
+        const f = E.current.ferramenta;
+        if (f === 'mover') {
+          const v0 = gesto.current.view0;
+          setView({ ...v0, x: v0.x + gs.dx, y: v0.y + gs.dy });
+          return;
+        }
+        const c = celulaDe(e.nativeEvent.pageX, e.nativeEvent.pageY);
+        if (f === 'sala') {
+          setPrevia({ a: gesto.current.inicio, b: c });
+          return;
+        }
+        if (f === 'pincel' || f === 'borracha') {
+          const u = gesto.current.ultima;
+          if (c.x !== u.x || c.y !== u.y) {
+            linhaAte(u, c);
+            gesto.current.ultima = c;
+          }
+        }
+      },
+      onPanResponderRelease: () => {
+        const p = previaRef.current;
+        if (E.current.ferramenta === 'sala' && p) {
+          guardar();
+          preencherRet(g.current, p.a.x, p.a.y, p.b.x, p.b.y, E.current.terreno);
+          setVersao((v) => v + 1);
+        }
+        setPrevia(null);
+      },
+    })
+  ).current;
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const el = caixaRef.current;
+    if (!el || !el.addEventListener) return;
+    const roda = (ev) => {
+      ev.preventDefault();
+      const r = el.getBoundingClientRect();
+      const px = ev.clientX - r.left;
+      const py = ev.clientY - r.top;
+      setView((v) => {
+        const s = limitar(v.s * (ev.deltaY < 0 ? 1.1 : 1 / 1.1), 4, 80);
+        return { s, x: px - ((px - v.x) / v.s) * s, y: py - ((py - v.y) / v.s) * s };
+      });
+    };
+    el.addEventListener('wheel', roda, { passive: false });
+    return () => el.removeEventListener('wheel', roda);
+  }, []);
+
+  // grade leve sobre a área toda (para ver onde pintar)
+  const gradeFundo = useMemo(() => {
+    let d = '';
+    for (let x = 0; x <= cols; x++) d += `M${x} 0V${rows}`;
+    for (let y = 0; y <= rows; y++) d += `M0 ${y}H${cols}`;
+    return d;
+  }, [cols, rows]);
+
+  // ---------- salvar ----------
+  async function salvarMapa() {
+    if (nome.trim().length < 2) return avisar('Dê um nome ao mapa');
+    setSalvando(true);
+    try {
+      const base = asset || {};
+      const camadaTiles = tilesOrig ? tilesOrig.camada : 'c0';
+      const tiles = {
+        type: 'tiles',
+        camada: camadaTiles,
+        x: 0,
+        y: 0,
+        z: 0,
+        cel: CEL_MUNDO,
+        cols,
+        rows,
+        w: cols * CEL_MUNDO,
+        h: rows * CEL_MUNDO,
+        linhas: paraLinhas(g.current),
+        tema,
+        mostrarGrade,
+        rotulo: nome.trim(),
+      };
+      const id = idSalvo || gerarId();
+      const final = {
+        ...base,
+        id,
+        tipo: 'mapa',
+        nome: nome.trim(),
+        img: '',
+        gerador: { tipo: gerador, semente },
+        sala: {
+          ...(base.sala || {}),
+          mapUrl: '',
+          mapW: cols * CEL_MUNDO,
+          mapH: rows * CEL_MUNDO,
+          tamGrade: CEL_MUNDO,
+          grade: true,
+          tipoGrade: 'quadrada',
+          opacGrade: 0.06,
+          offX: 0,
+          offY: 0,
+          snap: true,
+        },
+        camadas:
+          base.camadas && base.camadas.length
+            ? base.camadas
+            : [
+                { chave: 'c0', nome: 'Mapa', ordem: 0, visivel: true, travada: true },
+                { chave: 'c1', nome: 'Cenário', ordem: 1, visivel: true, travada: false },
+                { chave: 'c2', nome: 'Tokens', ordem: 2, visivel: true, travada: false },
+              ],
+        itens: [tiles, ...(base.itens || []).filter((i) => i.type !== 'tiles')],
+        autor: base.autor || usuario.nome,
+        criadoEm: base.criadoEm || Date.now(),
+        atualizadoEm: Date.now(),
+      };
+      await salvar(`${assetsDe(usuario.usuario)}/${id}`, final);
+      setIdSalvo(id);
+      avisar('Mapa salvo em Meus assets › Mapas');
+    } catch (e) {
+      avisar('Erro ao salvar o mapa');
+    }
+    setSalvando(false);
+  }
+
+  const pisoTotal = linhas.join('').split('').filter(ehPiso).length;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <Topo
+        titulo="Criador de mapas"
+        sub={`${cols}×${rows} células · ${pisoTotal} de piso`}
+        onVoltar={onVoltar}
+        direita={
+          <TouchableOpacity style={estCriadorMapas.btnSalvar} onPress={salvarMapa} disabled={salvando}>
+            {salvando ? <ActivityIndicator color="#fff" /> : <Icone name="content-save-outline" size={18} color="#fff" />}
+            <Text style={estCriadorMapas.btnSalvarTxt}>Salvar</Text>
+          </TouchableOpacity>
+        }
+      />
+      <View style={estCriadorMapas.linhaNome}>
+        <TextInput style={estCriadorMapas.inputNome} value={nome} onChangeText={setNome} placeholder="Nome do mapa (ex.: Cripta do Rei)" placeholderTextColor={C.suave} />
+      </View>
+
+      {/* ---------- canvas ---------- */}
+      <View
+        ref={caixaRef}
+        style={estCriadorMapas.canvas}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          const a = { w: width, h: height };
+          setArea(a);
+          if (caixaRef.current && caixaRef.current.measure) {
+            caixaRef.current.measure((x, y, w, h, px, py) => (origem.current = { x: px || 0, y: py || 0 }));
+          }
+          if (!area.w) ajustar(cols, rows, a);
+        }}
+        {...resp.panHandlers}
+      >
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Svg width="100%" height="100%">
+            <G transform={`translate(${view.x} ${view.y})`}>
+              <MapaTilesSvg linhas={linhas} cel={view.s} tema={tema} mostrarGrade={mostrarGrade} />
+              <G transform={`scale(${view.s})`}>
+                <Path d={gradeFundo} stroke="#ffffff" strokeOpacity={0.07} strokeWidth={1 / view.s} fill="none" />
+                {previa && (
+                  <Rect
+                    x={Math.min(previa.a.x, previa.b.x)}
+                    y={Math.min(previa.a.y, previa.b.y)}
+                    width={Math.abs(previa.b.x - previa.a.x) + 1}
+                    height={Math.abs(previa.b.y - previa.a.y) + 1}
+                    fill="rgba(34,211,238,0.25)"
+                    stroke={C.destaque2}
+                    strokeWidth={2 / view.s}
+                  />
+                )}
+              </G>
+            </G>
+          </Svg>
+        </View>
+        <View style={estCriadorMapas.zoom} pointerEvents="box-none">
+          <TouchableOpacity style={estCriadorMapas.zoomBtn} onPress={() => zoom(1.25)}>
+            <Icone name="plus" size={18} color={C.texto} />
+          </TouchableOpacity>
+          <TouchableOpacity style={estCriadorMapas.zoomBtn} onPress={() => zoom(0.8)}>
+            <Icone name="minus" size={18} color={C.texto} />
+          </TouchableOpacity>
+          <TouchableOpacity style={estCriadorMapas.zoomBtn} onPress={() => ajustar()}>
+            <Icone name="fit-to-screen-outline" size={18} color={C.texto} />
+          </TouchableOpacity>
+          <TouchableOpacity style={estCriadorMapas.zoomBtn} onPress={desfazer}>
+            <Icone name="undo" size={18} color={C.texto} />
+          </TouchableOpacity>
+        </View>
+        {!!msg && (
+          <View style={estCriadorMapas.aviso} pointerEvents="none">
+            <Text style={{ color: C.texto }}>{msg}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* ---------- painel ---------- */}
+      <View style={estCriadorMapas.painel}>
+        {aba === 'gerar' && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={estCriadorMapas.faixa}>
+            <View style={estCriadorMapas.grupo}>
+              {GERADORES.map((gen) => (
+                <Opcao key={gen.id} ativo={gerador === gen.id} icone={gen.icone} rotulo={gen.nome} onPress={() => setGerador(gen.id)} />
+              ))}
+            </View>
+            <View style={estCriadorMapas.grupo}>
+              {TAMANHOS.map(([c, r]) => (
+                <TouchableOpacity key={c} onPress={() => gerar(c, r)} style={[estCriadorMapas.chip, cols === c && rows === r && estCriadorMapas.chipAtivo]}>
+                  <Text style={estCriadorMapas.chipTxt}>{c}×{r}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {gerador === 'masmorra' && (
+              <View style={estCriadorMapas.passo}>
+                <Text style={estCriadorMapas.passoRot}>Salas</Text>
+                <View style={estCriadorMapas.grupo}>
+                  <TouchableOpacity onPress={() => setSalas(Math.max(2, salas - 1))} style={estCriadorMapas.passoBtn}>
+                    <Icone name="minus" size={14} color={C.texto} />
+                  </TouchableOpacity>
+                  <Text style={estCriadorMapas.passoVal}>{salas}</Text>
+                  <TouchableOpacity onPress={() => setSalas(Math.min(30, salas + 1))} style={estCriadorMapas.passoBtn}>
+                    <Icone name="plus" size={14} color={C.texto} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            {gerador === 'caverna' && <Opcao ativo={agua} icone="water" rotulo="Água" onPress={() => setAgua(!agua)} />}
+            <View style={estCriadorMapas.passo}>
+              <Text style={estCriadorMapas.passoRot}>Semente</Text>
+              <Text style={[estCriadorMapas.passoVal, { minWidth: 80 }]}>{semente}</Text>
+            </View>
+            <TouchableOpacity
+              style={estCriadorMapas.btnGerar}
+              onPress={() => {
+                const sem = novaSemente();
+                setSemente(sem);
+                gerar(cols, rows, sem);
+              }}
+            >
+              <Icone name="dice-multiple" size={18} color="#fff" />
+              <Text style={estCriadorMapas.btnGerarTxt}>Gerar novo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[estCriadorMapas.btnGerar, { backgroundColor: 'transparent', borderWidth: 1, borderColor: C.destaque2 }]} onPress={() => gerar()}>
+              <Icone name="refresh" size={18} color={C.destaque2} />
+              <Text style={[estCriadorMapas.btnGerarTxt, { color: C.destaque2 }]}>Mesma semente</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+
+        {aba === 'pintar' && (
+          <View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={estCriadorMapas.faixa}>
+              <View style={estCriadorMapas.grupo}>
+                {FERRAMENTAS_MAPA.map((f) => (
+                  <Opcao key={f.id} ativo={ferramenta === f.id} icone={f.icone} rotulo={f.nome} onPress={() => setFerramenta(f.id)} />
+                ))}
+              </View>
+            </ScrollView>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[estCriadorMapas.faixa, { paddingTop: 0 }]}>
+              <View style={estCriadorMapas.grupo}>
+                {TERRENOS.map((t) => (
+                  <Opcao key={t.id} ativo={terreno === t.id} icone={t.icone} rotulo={t.nome} onPress={() => setTerreno(t.id)} />
+                ))}
+              </View>
+              <View style={estCriadorMapas.grupo}>
+                {[0, 1, 2].map((r) => (
+                  <TouchableOpacity key={r} onPress={() => setRaio(r)} style={[estCriadorMapas.chip, raio === r && estCriadorMapas.chipAtivo]}>
+                    <Text style={estCriadorMapas.chipTxt}>{r * 2 + 1}×{r * 2 + 1}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity style={[estCriadorMapas.chip, { paddingHorizontal: 10 }]} onPress={limpar}>
+                <Text style={[estCriadorMapas.chipTxt, { color: C.perigo }]}>Limpar tudo</Text>
+              </TouchableOpacity>
+              <View style={estCriadorMapas.grupo}>
+                {TAMANHOS.map(([c, r]) => (
+                  <TouchableOpacity key={c} onPress={() => redimensionar(c, r)} style={[estCriadorMapas.chip, cols === c && rows === r && estCriadorMapas.chipAtivo]}>
+                    <Text style={estCriadorMapas.chipTxt}>{c}×{r}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        )}
+
+        {aba === 'aparencia' && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={estCriadorMapas.faixa}>
+            {Object.entries(TEMAS_MAPA).map(([id, t]) => (
+              <TouchableOpacity key={id} onPress={() => setTema(id)} style={[estCriadorMapas.tema, tema === id && { borderColor: C.destaque2 }]}>
+                <View style={[estCriadorMapas.temaAmostra, { backgroundColor: t.fundo }]}>
+                  <View style={{ width: 22, height: 14, backgroundColor: t.chao, borderWidth: 2, borderColor: t.parede }} />
+                </View>
+                <Text style={estCriadorMapas.temaTxt}>{t.nome}</Text>
+              </TouchableOpacity>
+            ))}
+            <Opcao ativo={mostrarGrade} icone="grid" rotulo="Grade no chão" onPress={() => setMostrarGrade(!mostrarGrade)} />
+          </ScrollView>
+        )}
+
+        <View style={estCriadorMapas.abas}>
+          {[
+            ['gerar', 'auto-fix', 'Gerar'],
+            ['pintar', 'brush', 'Pintar'],
+            ['aparencia', 'palette-outline', 'Aparência'],
+          ].map(([id, ic, rot]) => (
+            <TouchableOpacity key={id} style={[estCriadorMapas.aba, aba === id && estCriadorMapas.abaAtiva]} onPress={() => setAba(id)}>
+              <Icone name={ic} size={20} color={aba === id ? C.destaque2 : C.suave} />
+              <Text style={[estCriadorMapas.abaTxt, aba === id && { color: C.destaque2 }]}>{rot}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function Opcao({ ativo, icone, rotulo, onPress }) {
+  return (
+    <TouchableOpacity onPress={onPress} style={[estCriadorMapas.opcao, ativo && estCriadorMapas.opcaoAtiva]}>
+      <Icone name={icone} size={18} color={ativo ? '#fff' : C.suave} />
+      <Text style={[estCriadorMapas.opcaoTxt, ativo && { color: '#fff' }]}>{rotulo}</Text>
+    </TouchableOpacity>
+  );
+}
+
+const estCriadorMapas = StyleSheet.create({
+  btnSalvar: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.destaque, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  btnSalvarTxt: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  linhaNome: { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: C.painel, borderBottomWidth: 1, borderColor: C.borda },
+  inputNome: { backgroundColor: C.painel2, borderWidth: 1, borderColor: C.borda, color: C.texto, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 },
+  canvas: { flex: 1, backgroundColor: C.palco, overflow: 'hidden' },
+  zoom: { position: 'absolute', right: 10, top: 10, gap: 6 },
+  zoomBtn: { backgroundColor: 'rgba(21,18,31,0.9)', borderWidth: 1, borderColor: C.borda, borderRadius: 10, padding: 8 },
+  aviso: { position: 'absolute', bottom: 12, alignSelf: 'center', backgroundColor: 'rgba(21,18,31,0.95)', borderWidth: 1, borderColor: C.destaque, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
+  painel: { backgroundColor: C.painel, borderTopWidth: 1, borderColor: C.borda },
+  faixa: { alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, gap: 12 },
+  grupo: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  opcao: { alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: C.borda, minWidth: 62 },
+  opcaoAtiva: { backgroundColor: C.destaque, borderColor: C.destaque },
+  opcaoTxt: { color: C.suave, fontSize: 10, fontWeight: '700', marginTop: 1 },
+  chip: { minWidth: 46, height: 32, borderRadius: 8, borderWidth: 1, borderColor: C.borda, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  chipAtivo: { borderColor: C.destaque2, backgroundColor: 'rgba(34,211,238,0.15)' },
+  chipTxt: { color: C.texto, fontSize: 12, fontWeight: '700' },
+  passo: { alignItems: 'center', backgroundColor: C.painel2, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
+  passoRot: { color: C.suave, fontSize: 10, fontWeight: '700' },
+  passoBtn: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: C.borda, alignItems: 'center', justifyContent: 'center' },
+  passoVal: { color: C.texto, fontWeight: '800', minWidth: 28, textAlign: 'center', fontSize: 12 },
+  btnGerar: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.destaque, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  btnGerarTxt: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  tema: { alignItems: 'center', borderWidth: 2, borderColor: 'transparent', borderRadius: 10, padding: 4 },
+  temaAmostra: { width: 52, height: 36, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  temaTxt: { color: C.texto, fontSize: 11, marginTop: 3 },
+  abas: { flexDirection: 'row', borderTopWidth: 1, borderColor: C.borda, backgroundColor: C.bg },
+  aba: { flex: 1, alignItems: 'center', paddingVertical: 6, borderTopWidth: 2, borderColor: 'transparent' },
+  abaAtiva: { borderColor: C.destaque2, backgroundColor: C.painel },
+  abaTxt: { color: C.suave, fontSize: 10, fontWeight: '700', marginTop: 1 },
+});
+
+// ================================================================
 // App.js
 // ================================================================
 export default function App() {
   const [usuario, setUsuario] = useState(null);
   const [iniciando, setIniciando] = useState(true);
-  const [tela, setTela] = useState({ nome: 'inicio' }); // inicio | meus | packs | postagens | perfil | mesa | acesso
+  const [tela, setTela] = useState({ nome: 'inicio' }); // inicio | meus | packs | postagens | perfil | mesa | acesso | mapas
   const [mesaPendente, setMesaPendente] = useState(null); // mesa a abrir depois de um login
 
   function abrirMesa(codigo, u) {
@@ -6272,6 +7187,7 @@ export default function App() {
           setMesaPendente(tela.codigo);
           setTela({ nome: 'acesso' });
         }}
+        onCriarMapa={() => setTela({ nome: 'mapas', de: 'mesa', codigo: tela.codigo })}
       />
     );
   } else if (tela.nome === 'meus') {
@@ -6280,6 +7196,16 @@ export default function App() {
         usuario={usuario}
         onVoltar={() => setTela({ nome: 'inicio' })}
         onAbrirPacks={() => setTela({ nome: 'packs', de: 'meus' })}
+        onCriarMapa={(asset) => setTela({ nome: 'mapas', asset, de: 'meus' })}
+      />
+    );
+  } else if (tela.nome === 'mapas') {
+    conteudo = (
+      <CriadorMapas
+        key={(tela.asset && tela.asset.id) || 'novo'}
+        usuario={usuario}
+        asset={tela.asset}
+        onVoltar={() => setTela(tela.de === 'mesa' ? { nome: 'mesa', codigo: tela.codigo } : { nome: tela.de || 'inicio' })}
       />
     );
   } else if (tela.nome === 'packs') {
@@ -6298,6 +7224,7 @@ export default function App() {
         onMeusAssets={() => setTela({ nome: 'meus' })}
         onPacks={(aba) => setTela({ nome: 'packs', aba })}
         onPostagens={(aba) => setTela({ nome: 'postagens', aba })}
+        onCriarMapa={() => setTela({ nome: 'mapas' })}
         onPerfil={() => setTela({ nome: 'perfil' })}
         onEntrarConta={() => setTela({ nome: 'acesso' })}
       />

@@ -19,6 +19,7 @@ Tabletop virtual (releitura do Owlbear Rodeo) para o sistema de RPG **Vortex**, 
   - Oficiais (postados pelos admins) e packs próprios dos jogadores.
   - Cada usuário escolhe quais packs usar na mesa.
   - **Oficialização**: o jogador envia o pack; os admins recebem uma notificação e podem **aprovar**, **devolver com ressalvas** (comentário + cada asset marcado como aceito/não aceito) ou **recusar**.
+- **Criador de mapas** (estilo dungeon maker): geradores com semente (masmorra com salas e corredores, caverna, labirinto), pincel de terreno (chão, terra, água, lava), salas por retângulo, borracha, portas e escadas, paredes automáticas, 5 temas (pedra, pergaminho, caverna, floresta, sci-fi) e desfazer. O mapa vai para Meus assets › Mapas e é aplicado na mesa pela aba Assets.
 - **Imagens**: galeria, câmera ou URL. As imagens enviadas são comprimidas e guardadas na coleção `imagens` (sem precisar do Firebase Storage).
 
 ## Estrutura
@@ -40,8 +41,9 @@ src/
     util.js            ids, caixas, colisão
     grade.js           grade quadrada/hexagonal e encaixe
     link.js            links de convite
-  components/          Logo, Ficha (FichaVortex), CampoImagem, AssetMini, EditorObjeto, ModalNome
-  screens/             Acesso, Inicio, Perfil, Packs (Packs + Postagens), MeusAssets
+    masmorra.js        geradores de mapa (masmorra, caverna, labirinto) e pintura de células
+  components/          Logo, Ficha (FichaVortex), CampoImagem, CampoPasta, AssetMini, EditorObjeto, ModalNome, MapaTiles
+  screens/             Acesso, Inicio, Perfil, Packs (Packs + Postagens), MeusAssets, CriadorMapas
   mesa/                Mesa, Palco (SVG + gestos), PainelCamadas, ConfigMesa
 scripts/arquivo-unico.js   gera snack/App.js (tudo em um arquivo)
 snack/App.js               versão de arquivo único, pronta para colar no Snack

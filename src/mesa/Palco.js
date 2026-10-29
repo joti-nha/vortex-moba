@@ -3,6 +3,7 @@ import { View, PanResponder, StyleSheet, Platform } from 'react-native';
 import Svg, { G, Rect, Circle, Line, Path, Image as SvgImage, Text as SvgText, Defs, ClipPath } from 'react-native-svg';
 import { C } from '../config/theme';
 import { useImagem } from '../services/imagens';
+import { MapaTilesSvg } from '../components/MapaTiles';
 import { caminhoGrade, lerGrade } from '../utils/grade';
 import { caixa, limitar } from '../utils/util';
 
@@ -270,6 +271,8 @@ function Item({ it, escala }) {
   switch (it.type) {
     case 'token':
       return <TokenItem it={it} escala={escala} />;
+    case 'tiles':
+      return <MapaTilesSvg linhas={it.linhas} cel={it.cel || 70} tema={it.tema} mostrarGrade={it.mostrarGrade !== false} x={it.x} y={it.y} />;
     case 'prop':
       return <PropItem it={it} />;
     case 'rect':

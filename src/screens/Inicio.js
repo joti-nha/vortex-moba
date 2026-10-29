@@ -12,7 +12,7 @@ import { gerarCodigo, gerarId } from '../utils/util';
 const CAMADAS_PADRAO = ['Cenário', 'Desenhos', 'Tokens'];
 
 // Tela de ações: campanhas do usuário + atalhos (assets, packs, meus dados, postagens do admin)
-export default function Inicio({ usuario, onAbrirMesa, onMeusAssets, onPacks, onPostagens, onPerfil, onEntrarConta }) {
+export default function Inicio({ usuario, onAbrirMesa, onMeusAssets, onPacks, onPostagens, onPerfil, onEntrarConta, onCriarMapa }) {
   const admin = usuario.papel === 'admin';
   const [codigo, setCodigo] = useState('');
   const [nomeMesa, setNomeMesa] = useState('');
@@ -187,6 +187,7 @@ export default function Inicio({ usuario, onAbrirMesa, onMeusAssets, onPacks, on
           {[
             { rot: 'Meus assets', sub: 'fichas, objetos, mapas', icone: 'treasure-chest', cor: C.destaque, acao: onMeusAssets },
             { rot: 'Packs', sub: 'usar e criar packs', icone: 'package-variant', cor: C.destaque2, acao: () => onPacks() },
+            { rot: 'Criar mapa', sub: 'masmorras e cavernas', icone: 'map-plus', cor: '#22c55e', acao: onCriarMapa },
             { rot: 'Meus dados', sub: 'perfil e conta', icone: 'account-details-outline', cor: '#f59e0b', acao: onPerfil },
             ...(admin
               ? [{ rot: 'Postagens', sub: pedidosPendentes ? `${pedidosPendentes} pedido(s)` : 'packs oficiais', icone: 'shield-crown-outline', cor: '#ef4444', acao: () => onPostagens(pedidosPendentes ? 'pendentes' : 'oficiais'), badge: pedidosPendentes }]

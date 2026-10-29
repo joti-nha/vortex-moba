@@ -38,7 +38,7 @@ const DICA_FERRAMENTA = {
   capturar: 'Arraste um retângulo sobre os itens que formam a estrutura.',
 };
 
-export default function Mesa({ codigo, usuario, onSair, onEntrarConta }) {
+export default function Mesa({ codigo, usuario, onSair, onEntrarConta, onCriarMapa }) {
   const visitante = usuario.provedor === 'anonimo';
   const base = `${COL.mesas}/${codigo}`;
   const nome = usuario.nome;
@@ -593,9 +593,15 @@ export default function Mesa({ codigo, usuario, onSair, onEntrarConta }) {
             <Text style={[s.btnGrandeTxt, ferramenta === 'capturar' && { color: '#fff' }]}>Capturar estrutura</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.btnGrande} onPress={() => setSalvandoMapa(true)}>
-            <Icone name="map-plus" size={20} color={C.destaque2} />
+            <Icone name="content-save-outline" size={20} color={C.destaque2} />
             <Text style={s.btnGrandeTxt}>Salvar mesa como mapa</Text>
           </TouchableOpacity>
+          {!!onCriarMapa && (
+            <TouchableOpacity style={s.btnGrande} onPress={onCriarMapa}>
+              <Icone name="map-plus" size={20} color={C.destaque2} />
+              <Text style={s.btnGrandeTxt}>Criador de mapas</Text>
+            </TouchableOpacity>
+          )}
           <Text style={[s.dica, { maxWidth: 260 }]}>
             Monte com objetos, desenhos e formas; depois capture a área como estrutura ou salve a mesa inteira. Tudo vai para Meus assets e fica na aba Assets.
           </Text>
