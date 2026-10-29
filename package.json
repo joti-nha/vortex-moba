@@ -1,0 +1,22 @@
+{
+  "name": "vortex-moba",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "web": "expo start --web",
+    "arquivo-unico": "node scripts/arquivo-unico.js"
+  },
+  "dependencies": {
+    "expo": "~56.0.0",
+    "react": "*",
+    "react-native": "*",
+    "@expo/vector-icons": "*",
+    "@react-native-async-storage/async-storage": "*",
+    "expo-image-manipulator": "*",
+    "expo-image-picker": "*",
+    "expo-linking": "*",
+    "react-native-svg": "*"
+  }
+}
