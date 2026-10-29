@@ -3,11 +3,12 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Modal,
 import { MaterialCommunityIcons as Icone } from '@expo/vector-icons';
 import { AssetMini } from './AssetMini';
 import { CampoImagem } from './CampoImagem';
+import { CampoPasta } from './CampoPasta';
 import { C } from '../config/theme';
 import { EMOJIS } from '../data/constantes';
 
 // ---------- editor de objeto (adereço) ----------
-export function EditorObjeto({ asset, onSalvar, onApagar, onFechar, autor }) {
+export function EditorObjeto({ asset, onSalvar, onApagar, onFechar, autor, pastas }) {
   const [f, setF] = useState({ nome: '', emoji: '🪨', img: '', w: 1, h: 1, ...asset });
   const [erro, setErro] = useState('');
   const [ocupado, setOcupado] = useState(false);
@@ -31,14 +32,16 @@ export function EditorObjeto({ asset, onSalvar, onApagar, onFechar, autor }) {
         <View style={es.modal}>
           <View style={es.topo}>
             <AssetMini asset={{ ...f, tipo: 'objeto' }} tamanho={46} />
-            <Text style={es.titulo}>{f.id ? 'Editar objeto' : 'Novo objeto'}</Text>
+            <Text style={es.titulo}>{f.id ? 'Editar item de cenário' : 'Novo item de cenário'}</Text>
             <TouchableOpacity onPress={onFechar}>
               <Icone name="close" size={22} color={C.suave} />
             </TouchableOpacity>
           </View>
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={es.rotulo}>Nome</Text>
-            <TextInput style={es.input} value={f.nome} onChangeText={(t) => set('nome', t)} placeholder="Ex.: Mesa de pedra" placeholderTextColor={C.suave} />
+            <TextInput style={es.input} value={f.nome} onChangeText={(t) => set('nome', t)} placeholder="Ex.: Árvore antiga, mesa de pedra" placeholderTextColor={C.suave} />
+
+            {!!pastas && <CampoPasta valor={f.pasta || ''} pastas={pastas} onMudar={(v) => set('pasta', v)} />}
 
             <Text style={es.rotulo}>Ícone</Text>
             <View style={es.emojis}>

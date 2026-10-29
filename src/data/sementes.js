@@ -13,6 +13,19 @@ const fichaSemente = (id, pack, nome, tipo, tamanho, cor, corpo, precisao, essen
 });
 const objSemente = (id, pack, nome, emoji, w = 1, h = 1) => ({ id, pack, tipo: 'objeto', nome, emoji, w, h, img: '' });
 
+// Pastas dos assets iniciais (organização dentro de cada pack)
+const PASTA_INICIAL = {
+  a_cavaleira: 'Linha de frente', a_cleriga: 'Suporte', a_arqueiro: 'À distância', a_mago: 'À distância',
+  a_goblin: 'Humanoides', a_ogro: 'Humanoides', a_esqueleto: 'Mortos-vivos', a_dragao: 'Chefes',
+  a_lobo: 'Feras', a_aranha: 'Feras', a_golem: 'Constructos',
+  a_taverneiro: 'NPCs', a_mercadora: 'NPCs',
+  o_barril: 'Mobília', o_cadeira: 'Mobília', o_cama: 'Mobília', o_caneca: 'Utensílios',
+  o_pinheiro: 'Vegetação', o_carvalho: 'Vegetação', o_arbusto: 'Vegetação', o_cogumelos: 'Vegetação',
+  o_rocha: 'Terreno', o_tronco: 'Terreno', o_fogueira: 'Acampamento',
+  o_porta: 'Passagens', o_alcapao: 'Passagens', o_bau: 'Tesouro', o_ossada: 'Decoração', o_vela: 'Decoração',
+  o_correntes: 'Decoração', o_estatua: 'Decoração',
+};
+
 export const ASSETS_SEMENTE = [
   fichaSemente('a_cavaleira', 'pack_herois', 'Cavaleira Errante', 'Aliado', 1, '#3b82f6', 3, 1, 0, [{ nome: 'Atletismo', valor: 2 }, { nome: 'Intimidação', valor: 1 }], 14, 'Guerreira de armadura pesada que protege os aliados na linha de frente.'),
   fichaSemente('a_arqueiro', 'pack_herois', 'Arqueiro Élfico', 'Aliado', 1, '#22c55e', 1, 3, 1, [{ nome: 'Pontaria', valor: 2 }, { nome: 'Furtividade', valor: 1 }], 10, 'Atirador ágil que prefere manter distância.'),
@@ -64,4 +77,4 @@ export const ASSETS_SEMENTE = [
       { type: 'prop', x: 105, y: 175, w: 70, h: 35, emoji: '🚪', cor: '#a16207' },
     ],
   },
-].map((a) => ({ autor: 'Mesa Vortex', criadoEm: 0, ...a }));
+].map((a) => ({ autor: 'Mesa Vortex', criadoEm: 0, pasta: PASTA_INICIAL[a.id] || '', ...a }));

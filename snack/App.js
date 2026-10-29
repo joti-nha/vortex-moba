@@ -273,6 +273,24 @@ const ICONE_TIPO = {
   prop: 'cube-outline',
 };
 
+// ---------- pastas ----------
+const SEM_PASTA = 'Sem pasta';
+
+// Agrupa itens pelo campo "pasta": [{ pasta, itens }], com "Sem pasta" por último
+function agruparPorPasta(itens) {
+  const grupos = {};
+  itens.forEach((it) => {
+    const p = (it.pasta || '').trim() || SEM_PASTA;
+    (grupos[p] = grupos[p] || []).push(it);
+  });
+  return Object.keys(grupos)
+    .sort((a, b) => (a === SEM_PASTA) - (b === SEM_PASTA) || a.localeCompare(b))
+    .map((pasta) => ({ pasta, itens: grupos[pasta] }));
+}
+
+// Lista de pastas já usadas
+const pastasDe = (itens) => [...new Set(itens.map((it) => (it.pasta || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
 // ================================================================
 // src/services/imagens.js
 // ================================================================
@@ -505,6 +523,80 @@ const estCampoImagem = StyleSheet.create({
 });
 
 // ================================================================
+// src/components/CampoPasta.js
+// ================================================================
+// Escolha da pasta de um asset: pastas já existentes ou uma nova
+
+function CampoPasta({ valor, pastas = [], onMudar }) {
+  const [nova, setNova] = useState('');
+  const lista = [...new Set([...pastas, ...(valor ? [valor] : [])])].filter(Boolean).sort((a, b) => a.localeCompare(b));
+
+  const criar = () => {
+    const n = nova.trim();
+    if (!n) return;
+    onMudar(n);
+    setNova('');
+  };
+
+  return (
+    <View>
+      <Text style={estCampoPasta.rotulo}>Pasta</Text>
+      <View style={estCampoPasta.wrap}>
+        <TouchableOpacity onPress={() => onMudar('')} style={[estCampoPasta.chip, !valor && estCampoPasta.chipAtivo]}>
+          <Icone name="folder-off-outline" size={13} color={!valor ? '#fff' : C.suave} />
+          <Text style={[estCampoPasta.chipTxt, !valor && { color: '#fff' }]}>Sem pasta</Text>
+        </TouchableOpacity>
+        {lista.map((p) => (
+          <TouchableOpacity key={p} onPress={() => onMudar(p)} style={[estCampoPasta.chip, valor === p && estCampoPasta.chipAtivo]}>
+            <Icone name={valor === p ? 'folder-open' : 'folder-outline'} size={13} color={valor === p ? '#fff' : C.suave} />
+            <Text style={[estCampoPasta.chipTxt, valor === p && { color: '#fff' }]}>{p}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <View style={estCampoPasta.linha}>
+        <TextInput
+          style={estCampoPasta.input}
+          value={nova}
+          onChangeText={setNova}
+          onSubmitEditing={criar}
+          placeholder="Nova pasta (ex.: Mortos-vivos)"
+          placeholderTextColor={C.suave}
+        />
+        <TouchableOpacity style={estCampoPasta.btn} onPress={criar}>
+          <Icone name="folder-plus-outline" size={18} color={C.destaque2} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// Cabeçalho de pasta usado nas listas agrupadas
+function CabecalhoPasta({ nome, quantidade, aberta, onPress }) {
+  return (
+    <TouchableOpacity style={estCampoPasta.cabecalho} onPress={onPress} activeOpacity={onPress ? 0.6 : 1}>
+      <Icone name={aberta === false ? 'folder-outline' : 'folder-open-outline'} size={16} color={C.destaque2} />
+      <Text style={estCampoPasta.cabecalhoTxt}>{nome}</Text>
+      <Text style={estCampoPasta.cabecalhoNum}>{quantidade}</Text>
+      {!!onPress && <Icone name={aberta === false ? 'chevron-down' : 'chevron-up'} size={16} color={C.suave} />}
+    </TouchableOpacity>
+  );
+}
+
+const estCampoPasta = StyleSheet.create({
+  rotulo: { color: C.suave, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginTop: 12, marginBottom: 6 },
+  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: C.borda },
+  chipAtivo: { backgroundColor: C.destaque, borderColor: C.destaque },
+  chipTxt: { color: C.suave, fontSize: 12, fontWeight: '600' },
+  linha: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  input: { flex: 1, backgroundColor: C.painel2, borderWidth: 1, borderColor: C.borda, color: C.texto, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 13 },
+  btn: { borderWidth: 1, borderColor: C.destaque2, borderRadius: 8, padding: 7 },
+  cabecalho: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, marginTop: 4, borderBottomWidth: 1, borderColor: C.borda },
+  cabecalhoTxt: { color: C.destaque2, fontWeight: '800', fontSize: 12, flex: 1 },
+  cabecalhoNum: { color: C.suave, fontSize: 11 },
+});
+
+// ================================================================
 // src/components/Ficha.js
 // ================================================================
 // ---------- Ficha reduzida do Vortex ----------
@@ -608,7 +700,8 @@ const d6 = () => 1 + Math.floor(Math.random() * 6);
 // Modal de edição/consulta da ficha.
 //  ficha: objeto da ficha · titulo · somenteLeitura · acaoExtra {rotulo, icone, onPress}
 //  onSalvar(ficha) · onApagar() opcional · onFechar() · onRolagem(texto) opcional
-function FichaVortex({ ficha, titulo, somenteLeitura, acaoExtra, onSalvar, onApagar, onFechar, onRolagem }) {
+// pastas: se informado, mostra a escolha de pasta (usado em packs e em Meus assets)
+function FichaVortex({ ficha, titulo, somenteLeitura, acaoExtra, onSalvar, onApagar, onFechar, onRolagem, pastas }) {
   const [f, setF] = useState(normalizarFicha(ficha));
   const [erro, setErro] = useState('');
   const [ocupado, setOcupado] = useState(false);
@@ -702,6 +795,39 @@ function FichaVortex({ ficha, titulo, somenteLeitura, acaoExtra, onSalvar, onApa
               />
             )}
 
+            {/* token */}
+            <Text style={estFicha.secao}>Token (visual na mesa)</Text>
+            <View style={estFicha.linhaWrap}>
+              {TIPOS.map((t) => (
+                <TouchableOpacity key={t} disabled={ro} onPress={() => set('tipo', t)} style={[estFicha.chip, f.tipo === t && estFicha.chipAtivo]}>
+                  <Icone name={ICONE_CATEGORIA[t]} size={13} color={f.tipo === t ? '#fff' : C.suave} />
+                  <Text style={[estFicha.chipTxt, f.tipo === t && { color: '#fff' }]}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={[estFicha.linhaWrap, { marginTop: 8 }]}>
+              {[1, 2, 3, 4].map((t) => (
+                <TouchableOpacity key={t} disabled={ro} onPress={() => set('tamanho', t)} style={[estFicha.chip, f.tamanho === t && estFicha.chipAtivo]}>
+                  <Text style={[estFicha.chipTxt, f.tamanho === t && { color: '#fff' }]}>{t}×{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {!ro && (
+              <>
+                <View style={[estFicha.linhaWrap, { marginTop: 8 }]}>
+                  {CORES.map((c) => (
+                    <TouchableOpacity key={c} onPress={() => set('cor', c)} style={[estFicha.cor, { backgroundColor: c }, f.cor === c && estFicha.corSel]} />
+                  ))}
+                </View>
+                <View style={{ marginTop: 10 }}>
+                  <CampoImagem valor={f.img} onMudar={(ref) => set('img', ref)} largura={256} rotulo="Imagem do token" redondo />
+                </View>
+              </>
+            )}
+            {!!pastas && !ro && <CampoPasta valor={f.pasta || ''} pastas={pastas} onMudar={(v) => set('pasta', v)} />}
+
+            {/* atributos (ficha) */}
+            <Text style={[estFicha.secao, { color: C.destaque2, marginTop: 18 }]}>Ficha Vortex</Text>
             {/* atributos */}
             <Text style={estFicha.secao}>Atributos</Text>
             <View style={estFicha.linhaWrap}>
@@ -797,36 +923,6 @@ function FichaVortex({ ficha, titulo, somenteLeitura, acaoExtra, onSalvar, onApa
                 <Icone name="plus" size={14} color={C.destaque2} />
                 <Text style={estFicha.addTxt}>Recurso</Text>
               </TouchableOpacity>
-            )}
-
-            {/* token */}
-            <Text style={estFicha.secao}>Token</Text>
-            <View style={estFicha.linhaWrap}>
-              {TIPOS.map((t) => (
-                <TouchableOpacity key={t} disabled={ro} onPress={() => set('tipo', t)} style={[estFicha.chip, f.tipo === t && estFicha.chipAtivo]}>
-                  <Icone name={ICONE_CATEGORIA[t]} size={13} color={f.tipo === t ? '#fff' : C.suave} />
-                  <Text style={[estFicha.chipTxt, f.tipo === t && { color: '#fff' }]}>{t}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <View style={[estFicha.linhaWrap, { marginTop: 8 }]}>
-              {[1, 2, 3, 4].map((t) => (
-                <TouchableOpacity key={t} disabled={ro} onPress={() => set('tamanho', t)} style={[estFicha.chip, f.tamanho === t && estFicha.chipAtivo]}>
-                  <Text style={[estFicha.chipTxt, f.tamanho === t && { color: '#fff' }]}>{t}×{t}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {!ro && (
-              <>
-                <View style={[estFicha.linhaWrap, { marginTop: 8 }]}>
-                  {CORES.map((c) => (
-                    <TouchableOpacity key={c} onPress={() => set('cor', c)} style={[estFicha.cor, { backgroundColor: c }, f.cor === c && estFicha.corSel]} />
-                  ))}
-                </View>
-                <View style={{ marginTop: 10 }}>
-                  <CampoImagem valor={f.img} onMudar={(ref) => set('img', ref)} largura={256} rotulo="Imagem do token" redondo />
-                </View>
-              </>
             )}
 
             {/* notas */}
@@ -1079,11 +1175,11 @@ const estModalNome = StyleSheet.create({
 // Tipos de asset, nichos de packs e ícones (emojis) para objetos
 const TIPOS_ASSET = [
   { id: 'personagem', nome: 'Personagens', icone: 'account-group-outline' },
-  { id: 'objeto', nome: 'Objetos', icone: 'cube-outline' },
+  { id: 'objeto', nome: 'Cenário', icone: 'pine-tree' },
   { id: 'estrutura', nome: 'Estruturas', icone: 'home-city-outline' },
   { id: 'mapa', nome: 'Mapas', icone: 'map-outline' },
 ];
-const NOME_TIPO_ASSET = { personagem: 'Personagem', objeto: 'Objeto', estrutura: 'Estrutura', mapa: 'Mapa' };
+const NOME_TIPO_ASSET = { personagem: 'Personagem', objeto: 'Cenário', estrutura: 'Estrutura', mapa: 'Mapa' };
 
 const NICHOS = [
   { id: 'Fantasia', icone: 'sword' },
@@ -2038,6 +2134,19 @@ const fichaSemente = (id, pack, nome, tipo, tamanho, cor, corpo, precisao, essen
 });
 const objSemente = (id, pack, nome, emoji, w = 1, h = 1) => ({ id, pack, tipo: 'objeto', nome, emoji, w, h, img: '' });
 
+// Pastas dos assets iniciais (organização dentro de cada pack)
+const PASTA_INICIAL = {
+  a_cavaleira: 'Linha de frente', a_cleriga: 'Suporte', a_arqueiro: 'À distância', a_mago: 'À distância',
+  a_goblin: 'Humanoides', a_ogro: 'Humanoides', a_esqueleto: 'Mortos-vivos', a_dragao: 'Chefes',
+  a_lobo: 'Feras', a_aranha: 'Feras', a_golem: 'Constructos',
+  a_taverneiro: 'NPCs', a_mercadora: 'NPCs',
+  o_barril: 'Mobília', o_cadeira: 'Mobília', o_cama: 'Mobília', o_caneca: 'Utensílios',
+  o_pinheiro: 'Vegetação', o_carvalho: 'Vegetação', o_arbusto: 'Vegetação', o_cogumelos: 'Vegetação',
+  o_rocha: 'Terreno', o_tronco: 'Terreno', o_fogueira: 'Acampamento',
+  o_porta: 'Passagens', o_alcapao: 'Passagens', o_bau: 'Tesouro', o_ossada: 'Decoração', o_vela: 'Decoração',
+  o_correntes: 'Decoração', o_estatua: 'Decoração',
+};
+
 const ASSETS_SEMENTE = [
   fichaSemente('a_cavaleira', 'pack_herois', 'Cavaleira Errante', 'Aliado', 1, '#3b82f6', 3, 1, 0, [{ nome: 'Atletismo', valor: 2 }, { nome: 'Intimidação', valor: 1 }], 14, 'Guerreira de armadura pesada que protege os aliados na linha de frente.'),
   fichaSemente('a_arqueiro', 'pack_herois', 'Arqueiro Élfico', 'Aliado', 1, '#22c55e', 1, 3, 1, [{ nome: 'Pontaria', valor: 2 }, { nome: 'Furtividade', valor: 1 }], 10, 'Atirador ágil que prefere manter distância.'),
@@ -2089,7 +2198,7 @@ const ASSETS_SEMENTE = [
       { type: 'prop', x: 105, y: 175, w: 70, h: 35, emoji: '🚪', cor: '#a16207' },
     ],
   },
-].map((a) => ({ autor: 'Mesa Vortex', criadoEm: 0, ...a }));
+].map((a) => ({ autor: 'Mesa Vortex', criadoEm: 0, pasta: PASTA_INICIAL[a.id] || '', ...a }));
 
 // ================================================================
 // src/services/assets.js
@@ -2653,6 +2762,7 @@ function Mesa({ codigo, usuario, onSair, onEntrarConta }) {
   const [fontes, setFontes] = useState([]); // [{ id, nome, assets }]
   const [fonte, setFonte] = useState('rapido');
   const [tipoAsset, setTipoAsset] = useState('personagem');
+  const [pastaAsset, setPastaAsset] = useState(null); // filtro de pasta no navegador de assets
   const [modelo, setModelo] = useState(null);
   const [rapido, setRapido] = useState({ nome: '', tam: 1 });
   const [fichaDe, setFichaDe] = useState(null); // id do token com a ficha aberta
@@ -3191,7 +3301,10 @@ function Mesa({ codigo, usuario, onSair, onEntrarConta }) {
     const assetsFonte = fonteAtual ? fonteAtual.assets : [];
     const tiposDisp = TIPOS_ASSET.filter((t) => assetsFonte.some((a) => a.tipo === t.id));
     const tipoEfetivo = tiposDisp.some((t) => t.id === tipoAsset) ? tipoAsset : tiposDisp[0] ? tiposDisp[0].id : null;
-    const lista = assetsFonte.filter((a) => a.tipo === tipoEfetivo);
+    const doTipo = assetsFonte.filter((a) => a.tipo === tipoEfetivo);
+    const pastas = pastasDe(doTipo);
+    const pastaEfetiva = pastaAsset && pastas.includes(pastaAsset) ? pastaAsset : null;
+    const lista = pastaEfetiva ? doTipo.filter((a) => (a.pasta || '').trim() === pastaEfetiva) : doTipo;
     return (
       <View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[estMesa.baseConteudo, { paddingBottom: 2, gap: 6 }]}>
@@ -3226,12 +3339,22 @@ function Mesa({ codigo, usuario, onSair, onEntrarConta }) {
           <View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[estMesa.baseConteudo, { paddingVertical: 2, gap: 4 }]}>
               {tiposDisp.map((t) => (
-                <TouchableOpacity key={t.id} onPress={() => setTipoAsset(t.id)} style={[estMesa.tipoChip, tipoEfetivo === t.id && estMesa.tipoChipAtivo]}>
+                <TouchableOpacity key={t.id} onPress={() => { setTipoAsset(t.id); setPastaAsset(null); }} style={[estMesa.tipoChip, tipoEfetivo === t.id && estMesa.tipoChipAtivo]}>
                   <Icone name={t.icone} size={14} color={tipoEfetivo === t.id ? C.destaque2 : C.suave} />
                   <Text style={[estMesa.tipoTxt, tipoEfetivo === t.id && { color: C.destaque2 }]}>{t.nome}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
+            {pastas.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[estMesa.baseConteudo, { paddingVertical: 2, gap: 4 }]}>
+                {[null, ...pastas].map((p) => (
+                  <TouchableOpacity key={p || 'todas'} onPress={() => setPastaAsset(p)} style={[estMesa.pastaChip, pastaEfetiva === p && estMesa.pastaChipAtiva]}>
+                    <Icone name={p ? (pastaEfetiva === p ? 'folder-open' : 'folder-outline') : 'folder-multiple-outline'} size={13} color={pastaEfetiva === p ? '#fff' : C.suave} />
+                    <Text style={[estMesa.pastaTxt, pastaEfetiva === p && { color: '#fff' }]}>{p || 'Todas'}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[estMesa.baseConteudo, { gap: 8 }]}>
               {lista.length === 0 && (
                 <Text style={estMesa.dica}>
@@ -3675,6 +3798,9 @@ const estMesa = StyleSheet.create({
   tipoChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderBottomWidth: 2, borderColor: 'transparent' },
   tipoChipAtivo: { borderColor: C.destaque2 },
   tipoTxt: { color: C.suave, fontSize: 11, fontWeight: '700' },
+  pastaChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: C.borda },
+  pastaChipAtiva: { backgroundColor: C.destaque2, borderColor: C.destaque2 },
+  pastaTxt: { color: C.suave, fontSize: 11, fontWeight: '700' },
   assetBtn: { alignItems: 'center', width: 66, padding: 4, borderRadius: 10, borderWidth: 1, borderColor: 'transparent' },
   assetBtnAtivo: { borderColor: C.destaque2, backgroundColor: 'rgba(34,211,238,0.12)' },
   assetNome: { color: C.texto, fontSize: 10, marginTop: 3, textAlign: 'center' },
@@ -4393,7 +4519,7 @@ const estInicio = StyleSheet.create({
 // src/components/EditorObjeto.js
 // ================================================================
 // ---------- editor de objeto (adereço) ----------
-function EditorObjeto({ asset, onSalvar, onApagar, onFechar, autor }) {
+function EditorObjeto({ asset, onSalvar, onApagar, onFechar, autor, pastas }) {
   const [f, setF] = useState({ nome: '', emoji: '🪨', img: '', w: 1, h: 1, ...asset });
   const [erro, setErro] = useState('');
   const [ocupado, setOcupado] = useState(false);
@@ -4417,14 +4543,16 @@ function EditorObjeto({ asset, onSalvar, onApagar, onFechar, autor }) {
         <View style={estEditorObjeto.modal}>
           <View style={estEditorObjeto.topo}>
             <AssetMini asset={{ ...f, tipo: 'objeto' }} tamanho={46} />
-            <Text style={estEditorObjeto.titulo}>{f.id ? 'Editar objeto' : 'Novo objeto'}</Text>
+            <Text style={estEditorObjeto.titulo}>{f.id ? 'Editar item de cenário' : 'Novo item de cenário'}</Text>
             <TouchableOpacity onPress={onFechar}>
               <Icone name="close" size={22} color={C.suave} />
             </TouchableOpacity>
           </View>
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={estEditorObjeto.rotulo}>Nome</Text>
-            <TextInput style={estEditorObjeto.input} value={f.nome} onChangeText={(t) => set('nome', t)} placeholder="Ex.: Mesa de pedra" placeholderTextColor={C.suave} />
+            <TextInput style={estEditorObjeto.input} value={f.nome} onChangeText={(t) => set('nome', t)} placeholder="Ex.: Árvore antiga, mesa de pedra" placeholderTextColor={C.suave} />
+
+            {!!pastas && <CampoPasta valor={f.pasta || ''} pastas={pastas} onMudar={(v) => set('pasta', v)} />}
 
             <Text style={estEditorObjeto.rotulo}>Ícone</Text>
             <View style={estEditorObjeto.emojis}>
@@ -4577,15 +4705,20 @@ function AssetsDoPack({ assets, renderAcoes, onAbrir }) {
           </TouchableOpacity>
         ))}
       </View>
-      {lista.map((a) => (
-        <TouchableOpacity key={a.id} style={estPacks.assetLinha} onPress={() => onAbrir && onAbrir(a)} activeOpacity={onAbrir ? 0.6 : 1}>
-          <AssetMini asset={a} tamanho={38} />
-          <View style={{ flex: 1 }}>
-            <Text style={estPacks.assetNome}>{a.nome}</Text>
-            <Text style={estPacks.assetInfo}>{resumoAsset(a)}</Text>
-          </View>
-          {renderAcoes && renderAcoes(a)}
-        </TouchableOpacity>
+      {agruparPorPasta(lista).map((g) => (
+        <View key={g.pasta}>
+          {(g.pasta !== SEM_PASTA || lista.some((a) => a.pasta)) && <CabecalhoPasta nome={g.pasta} quantidade={g.itens.length} />}
+          {g.itens.map((a) => (
+            <TouchableOpacity key={a.id} style={estPacks.assetLinha} onPress={() => onAbrir && onAbrir(a)} activeOpacity={onAbrir ? 0.6 : 1}>
+              <AssetMini asset={a} tamanho={38} />
+              <View style={{ flex: 1 }}>
+                <Text style={estPacks.assetNome}>{a.nome}</Text>
+                <Text style={estPacks.assetInfo}>{resumoAsset(a)}</Text>
+              </View>
+              {renderAcoes && renderAcoes(a)}
+            </TouchableOpacity>
+          ))}
+        </View>
       ))}
     </View>
   );
@@ -4619,8 +4752,10 @@ function GerenciadorPacks({ usuario, lista, setTodos, meus, modoAdmin, novoPack,
   const [editObjeto, setEditObjeto] = useState(null);
   const [renomear, setRenomear] = useState(null);
   const [importarPara, setImportarPara] = useState(null);
+  const [recemCriado, setRecemCriado] = useState(null);
 
-  async function gravarPack(p) {
+  // manterAberto: ao criar um pack novo o editor continua aberto para adicionar tokens e fichas
+  async function gravarPack(p, manterAberto = false) {
     const { assets, ...dados } = p;
     const final = { ...dados, id: p.id || gerarId(), autor: p.autor || usuario.nome, criadoEm: p.criadoEm || Date.now(), atualizadoEm: Date.now() };
     await salvar(`${COL.packs}/${final.id}`, final);
@@ -4629,7 +4764,15 @@ function GerenciadorPacks({ usuario, lista, setTodos, meus, modoAdmin, novoPack,
       const novo = { ...final, assets: antigo ? antigo.assets : [] };
       return antigo ? l.map((x) => (x.id === final.id ? novo : x)) : [...l, novo];
     });
-    setEditPack(null);
+    if (manterAberto) {
+      setEditPack(final);
+      setAberto(final.id);
+      setRecemCriado(final.id);
+    } else {
+      setEditPack(null);
+      setRecemCriado(null);
+    }
+    return final;
   }
 
   async function excluirPack(p) {
@@ -4716,8 +4859,8 @@ function GerenciadorPacks({ usuario, lista, setTodos, meus, modoAdmin, novoPack,
               <View style={{ marginTop: 10 }}>
                 {editavel ? (
                   <View style={estPacks.acoesPack}>
-                    <BotaoMini icone="account-plus-outline" rotulo="Personagem" onPress={() => setEditFicha({ asset: { tipo: 'Inimigo', recursos: [{ nome: 'Vida', atual: 10, max: 10 }] }, pack: p })} />
-                    <BotaoMini icone="cube-outline" rotulo="Objeto" onPress={() => setEditObjeto({ asset: {}, pack: p })} />
+                    <BotaoMini icone="account-plus-outline" rotulo="Personagem (com ficha)" onPress={() => setEditFicha({ asset: { tipo: 'Inimigo', recursos: [{ nome: 'Vida', atual: 10, max: 10 }] }, pack: p })} />
+                    <BotaoMini icone="pine-tree" rotulo="Cenário" onPress={() => setEditObjeto({ asset: {}, pack: p })} />
                     <BotaoMini icone="import" rotulo="Dos meus assets" onPress={() => setImportarPara(p)} />
                   </View>
                 ) : (
@@ -4754,12 +4897,26 @@ function GerenciadorPacks({ usuario, lista, setTodos, meus, modoAdmin, novoPack,
 
       {editPack && (
         <EditorPack
+          key={editPack.id || 'novo'}
           pack={editPack}
           autor={usuario.nome}
           podePublicar={modoAdmin}
-          onSalvar={gravarPack}
+          recemCriado={recemCriado === editPack.id}
+          assets={editPack.id ? ((lista.find((x) => x.id === editPack.id) || {}).assets || []) : []}
+          onSalvar={(dados) => gravarPack(dados, !dados.id)}
           onExcluir={editPack.id ? () => excluirPack(editPack) : null}
-          onFechar={() => setEditPack(null)}
+          onNovoToken={() => setEditFicha({ asset: { tipo: 'Inimigo', recursos: [{ nome: 'Vida', atual: 10, max: 10 }] }, pack: editPack })}
+          onNovoObjeto={() => setEditObjeto({ asset: {}, pack: editPack })}
+          onImportar={() => setImportarPara(editPack)}
+          onAbrirAsset={(a) => {
+            if (a.tipo === 'personagem') setEditFicha({ asset: fichaDoAsset(a), pack: editPack });
+            else if (a.tipo === 'objeto') setEditObjeto({ asset: a, pack: editPack });
+            else setRenomear(a);
+          }}
+          onFechar={() => {
+            setEditPack(null);
+            setRecemCriado(null);
+          }}
         />
       )}
 
@@ -4767,6 +4924,7 @@ function GerenciadorPacks({ usuario, lista, setTodos, meus, modoAdmin, novoPack,
         <FichaVortex
           ficha={editFicha.asset}
           titulo={`Personagem · ${editFicha.pack.nome}`}
+          pastas={pastasDe(((lista.find((x) => x.id === editFicha.pack.id) || {}).assets || []).filter((a) => a.tipo === 'personagem'))}
           onSalvar={async (f) => {
             await gravarAsset(assetDaFicha(f, { pack: editFicha.pack.id }), editFicha.pack.id);
             setEditFicha(null);
@@ -4787,6 +4945,7 @@ function GerenciadorPacks({ usuario, lista, setTodos, meus, modoAdmin, novoPack,
         <EditorObjeto
           asset={editObjeto.asset}
           autor={usuario.nome}
+          pastas={pastasDe(((lista.find((x) => x.id === editObjeto.pack.id) || {}).assets || []).filter((a) => a.tipo === 'objeto'))}
           onSalvar={async (o) => {
             await gravarAsset(o, editObjeto.pack.id);
             setEditObjeto(null);
@@ -5309,7 +5468,15 @@ function CartaoRevisao({ pack, onDecidir }) {
   );
 }
 
-function EditorPack({ pack, autor, podePublicar, onSalvar, onExcluir, onFechar }) {
+// Resumo da ficha atrelada ao token (para a lista do editor de pack)
+function resumoFicha(a) {
+  const vida = (a.recursos || [])[0];
+  return `${a.categoria || 'Aliado'} · ${a.tamanho || 1}×${a.tamanho || 1} · C${a.corpo || 0} P${a.precisao || 0} E${a.essencia || 0}${
+    vida ? ` · ${vida.nome} ${vida.max}` : ''
+  }${(a.pericias || []).length ? ` · ${a.pericias.length} perícia(s)` : ''}`;
+}
+
+function EditorPack({ pack, autor, podePublicar, recemCriado, assets = [], onSalvar, onExcluir, onNovoToken, onNovoObjeto, onImportar, onAbrirAsset, onFechar }) {
   const [f, setF] = useState(pack);
   const [erro, setErro] = useState('');
   const [ocupado, setOcupado] = useState(false);
@@ -5323,9 +5490,13 @@ function EditorPack({ pack, autor, podePublicar, onSalvar, onExcluir, onFechar }
       await onSalvar({ ...f, nome: f.nome.trim(), descricao: (f.descricao || '').trim() });
     } catch (e) {
       setErro('Erro ao salvar.');
-      setOcupado(false);
     }
+    setOcupado(false);
   }
+
+  const personagens = assets.filter((a) => a.tipo === 'personagem');
+  const objetos = assets.filter((a) => a.tipo === 'objeto');
+  const outros = assets.filter((a) => a.tipo !== 'personagem' && a.tipo !== 'objeto');
 
   return (
     <Modal transparent animationType="fade" onRequestClose={onFechar}>
@@ -5374,6 +5545,74 @@ function EditorPack({ pack, autor, podePublicar, onSalvar, onExcluir, onFechar }
                 <Text style={[estPacks.btnUsarTxt, f.publicado && { color: '#fff' }]}>{f.publicado ? 'Publicado' : 'Rascunho (não publicado)'}</Text>
               </TouchableOpacity>
             )}
+
+            {/* tokens e fichas atrelados ao pack */}
+            {f.id ? (
+              <View style={estPacks.secaoAssets}>
+                {recemCriado && (
+                  <View style={estPacks.avisoNovo}>
+                    <Icone name="check-circle-outline" size={18} color={C.ok} />
+                    <Text style={estPacks.avisoNovoTxt}>Pack criado! Agora adicione os tokens e as fichas deles.</Text>
+                  </View>
+                )}
+                <Text style={estPacks.rotulo}>Adicionar ao pack</Text>
+                <View style={estPacks.escolhaTipo}>
+                  <TouchableOpacity style={[estPacks.opcaoTipo, { borderColor: C.destaque }]} onPress={onNovoToken}>
+                    <Icone name="account-plus-outline" size={26} color={C.destaque} />
+                    <Text style={estPacks.opcaoTipoTit}>Personagem</Text>
+                    <Text style={estPacks.opcaoTipoSub}>token + ficha Vortex</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[estPacks.opcaoTipo, { borderColor: C.ok }]} onPress={onNovoObjeto}>
+                    <Icone name="pine-tree" size={26} color={C.ok} />
+                    <Text style={estPacks.opcaoTipoTit}>Cenário</Text>
+                    <Text style={estPacks.opcaoTipoSub}>árvores, móveis, portas...</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity style={{ alignSelf: 'flex-start', marginTop: 6 }} onPress={onImportar}>
+                  <Text style={[estPacks.dica, { marginTop: 0, color: C.destaque2 }]}>+ Trazer de Meus assets (estruturas, mapas...)</Text>
+                </TouchableOpacity>
+
+                <Text style={estPacks.rotulo}>Personagens ({personagens.length})</Text>
+                {personagens.length === 0 && <Text style={[estPacks.dica, { marginTop: 0 }]}>Nenhum personagem ainda. Cada token tem a sua ficha.</Text>}
+                {agruparPorPasta(personagens).map((g) => (
+                  <View key={g.pasta}>
+                    <CabecalhoPasta nome={g.pasta} quantidade={g.itens.length} />
+                    {g.itens.map((a) => (
+                      <TouchableOpacity key={a.id} style={estPacks.assetLinha} onPress={() => onAbrirAsset(a)}>
+                        <AssetMini asset={a} tamanho={40} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={estPacks.assetNome}>{a.nome}</Text>
+                          <Text style={estPacks.assetInfo}>{resumoFicha(a)}</Text>
+                        </View>
+                        <Icone name="card-account-details-outline" size={18} color={C.destaque2} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ))}
+
+                <Text style={estPacks.rotulo}>Cenário ({objetos.length})</Text>
+                {objetos.length === 0 && <Text style={[estPacks.dica, { marginTop: 0 }]}>Nenhum item de cenário ainda.</Text>}
+                {agruparPorPasta(objetos).map((g) => (
+                  <View key={g.pasta}>
+                    <CabecalhoPasta nome={g.pasta} quantidade={g.itens.length} />
+                    <View style={estPacks.previa}>
+                      {g.itens.map((a) => (
+                        <TouchableOpacity key={a.id} onPress={() => onAbrirAsset(a)} style={{ alignItems: 'center', width: 58 }}>
+                          <AssetMini asset={a} tamanho={40} />
+                          <Text style={[estPacks.assetInfo, { textAlign: 'center' }]} numberOfLines={1}>{a.nome}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+                {outros.length > 0 && <Text style={estPacks.dica}>Também no pack: {contagem(outros)}.</Text>}
+              </View>
+            ) : (
+              <View style={[estPacks.avisoNovo, { marginTop: 14 }]}>
+                <Icone name="information-outline" size={18} color={C.destaque2} />
+                <Text style={estPacks.avisoNovoTxt}>Ao criar o pack, você já adiciona os tokens e as fichas atreladas a eles aqui mesmo.</Text>
+              </View>
+            )}
           </ScrollView>
           {!!erro && <Text style={estPacks.erro}>{erro}</Text>}
           <View style={estPacks.acoes}>
@@ -5383,7 +5622,11 @@ function EditorPack({ pack, autor, podePublicar, onSalvar, onExcluir, onFechar }
               </TouchableOpacity>
             )}
             <TouchableOpacity style={[estPacks.btn, { backgroundColor: C.destaque }]} onPress={ok} disabled={ocupado}>
-              {ocupado ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Salvar</Text>}
+              {ocupado ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ color: '#fff', fontWeight: '700' }}>{f.id ? 'Salvar e fechar' : 'Criar e adicionar tokens'}</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -5492,6 +5735,15 @@ const estPacks = StyleSheet.create({
   iconeOp: { width: 38, height: 38, borderRadius: 8, borderWidth: 1, borderColor: C.borda, alignItems: 'center', justifyContent: 'center' },
   acoes: { flexDirection: 'row', gap: 8, marginTop: 14 },
   btn: { flex: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  secaoAssets: { marginTop: 14, borderTopWidth: 1, borderColor: C.borda, paddingTop: 4 },
+  avisoNovo: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.bg, borderRadius: 10, padding: 10, marginTop: 8 },
+  avisoNovoTxt: { color: C.texto, fontSize: 12, flex: 1 },
+  escolhaTipo: { flexDirection: 'row', gap: 8 },
+  opcaoTipo: { flex: 1, alignItems: 'center', borderWidth: 1, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 6, backgroundColor: C.bg },
+  opcaoTipoTit: { color: C.texto, fontWeight: '800', marginTop: 4 },
+  opcaoTipoSub: { color: C.suave, fontSize: 10, textAlign: 'center' },
+  btnToken: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: C.destaque, borderRadius: 10, paddingVertical: 10, marginTop: 6 },
+  btnTokenTxt: { color: '#fff', fontWeight: '800' },
 });
 
 // ================================================================
@@ -5597,7 +5849,10 @@ function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
               </TouchableOpacity>
             </View>
           )}
-          {filtrados.map((a) => (
+          {agruparPorPasta(filtrados).map((g) => (
+            <View key={g.pasta} style={{ gap: 10 }}>
+              {(g.pasta !== SEM_PASTA || filtrados.some((a) => a.pasta)) && <CabecalhoPasta nome={g.pasta} quantidade={g.itens.length} />}
+          {g.itens.map((a) => (
             <TouchableOpacity key={a.id} style={estMeusAssets.card} onPress={() => abrir(a)}>
               <AssetMini asset={a} tamanho={46} />
               <View style={{ flex: 1 }}>
@@ -5611,6 +5866,8 @@ function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
               </View>
               <Text style={[estMeusAssets.selo, a.origem ? estMeusAssets.seloPack : estMeusAssets.seloMeu]}>{a.origem ? 'de pack' : 'seu'}</Text>
             </TouchableOpacity>
+          ))}
+            </View>
           ))}
         </ScrollView>
       )}
@@ -5626,6 +5883,7 @@ function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
 
       {editFicha && (
         <FichaVortex
+          pastas={pastasDe(lista.filter((x) => x.tipo === 'personagem'))}
           ficha={editFicha}
           titulo={editFicha.origem ? 'Sua cópia (de um pack)' : 'Ficha Vortex'}
           onSalvar={async (f) => {
@@ -5645,6 +5903,7 @@ function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
       )}
       {editObjeto && (
         <EditorObjeto
+          pastas={pastasDe(lista.filter((x) => x.tipo === 'objeto'))}
           asset={editObjeto}
           autor={usuario.nome}
           onSalvar={async (o) => {

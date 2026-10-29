@@ -59,3 +59,21 @@ export const ICONE_TIPO = {
   circle: 'circle-outline',
   prop: 'cube-outline',
 };
+
+// ---------- pastas ----------
+export const SEM_PASTA = 'Sem pasta';
+
+// Agrupa itens pelo campo "pasta": [{ pasta, itens }], com "Sem pasta" por último
+export function agruparPorPasta(itens) {
+  const grupos = {};
+  itens.forEach((it) => {
+    const p = (it.pasta || '').trim() || SEM_PASTA;
+    (grupos[p] = grupos[p] || []).push(it);
+  });
+  return Object.keys(grupos)
+    .sort((a, b) => (a === SEM_PASTA) - (b === SEM_PASTA) || a.localeCompare(b))
+    .map((pasta) => ({ pasta, itens: grupos[pasta] }));
+}
+
+// Lista de pastas já usadas
+export const pastasDe = (itens) => [...new Set(itens.map((it) => (it.pasta || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));

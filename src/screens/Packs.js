@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Modal,
 import { MaterialCommunityIcons as Icone } from '@expo/vector-icons';
 import { AssetMini } from '../components/AssetMini';
 import { CampoImagem } from '../components/CampoImagem';
+import { CabecalhoPasta } from '../components/CampoPasta';
 import { EditorObjeto } from '../components/EditorObjeto';
 import FichaVortex from '../components/Ficha';
 import { ModalNome } from '../components/ModalNome';
@@ -12,7 +13,7 @@ import { STATUS_PACK, assetDaFicha, assetsDe, carregarMeusAssets, carregarTodosP
 import { lerPacksAtivos, salvarPacksAtivos } from '../services/auth';
 import { COL, apagar, atualizar, consultar, salvar } from '../services/firestore';
 import { useImagem } from '../services/imagens';
-import { gerarId } from '../utils/util';
+import { SEM_PASTA, agruparPorPasta, gerarId, pastasDe } from '../utils/util';
 
 const ICONES_PACK = ['cards-outline', 'shield-sword-outline', 'skull-outline', 'pine-tree', 'castle', 'glass-mug-variant', 'map-legend', 'rocket-launch-outline', 'ghost-outline', 'treasure-chest', 'home-city', 'dragon'];
 
@@ -93,15 +94,20 @@ function AssetsDoPack({ assets, renderAcoes, onAbrir }) {
           </TouchableOpacity>
         ))}
       </View>
-      {lista.map((a) => (
-        <TouchableOpacity key={a.id} style={ps.assetLinha} onPress={() => onAbrir && onAbrir(a)} activeOpacity={onAbrir ? 0.6 : 1}>
-          <AssetMini asset={a} tamanho={38} />
-          <View style={{ flex: 1 }}>
-            <Text style={ps.assetNome}>{a.nome}</Text>
-            <Text style={ps.assetInfo}>{resumoAsset(a)}</Text>
-          </View>
-          {renderAcoes && renderAcoes(a)}
-        </TouchableOpacity>
+      {agruparPorPasta(lista).map((g) => (
+        <View key={g.pasta}>
+          {(g.pasta !== SEM_PASTA || lista.some((a) => a.pasta)) && <CabecalhoPasta nome={g.pasta} quantidade={g.itens.length} />}
+          {g.itens.map((a) => (
+            <TouchableOpacity key={a.id} style={ps.assetLinha} onPress={() => onAbrir && onAbrir(a)} activeOpacity={onAbrir ? 0.6 : 1}>
+              <AssetMini asset={a} tamanho={38} />
+              <View style={{ flex: 1 }}>
+                <Text style={ps.assetNome}>{a.nome}</Text>
+                <Text style={ps.assetInfo}>{resumoAsset(a)}</Text>
+              </View>
+              {renderAcoes && renderAcoes(a)}
+            </TouchableOpacity>
+          ))}
+        </View>
       ))}
     </View>
   );
@@ -135,8 +141,10 @@ function GerenciadorPacks({ usuario, lista, setTodos, meus, modoAdmin, novoPack,
   const [editObjeto, setEditObjeto] = useState(null);
   const [renomear, setRenomear] = useState(null);
   const [importarPara, setImportarPara] = useState(null);
+  const [recemCriado, setRecemCriado] = useState(null);
 
-  async function gravarPack(p) {
+  // manterAberto: ao criar um pack novo o editor continua aberto para adicionar tokens e fichas
+  async function gravarPack(p, manterAberto = false) {
     const { assets, ...dados } = p;
     const final = { ...dados, id: p.id || gerarId(), autor: p.autor || usuario.nome, criadoEm: p.criadoEm || Date.now(), atualizadoEm: Date.now() };
     await salvar(`${COL.packs}/${final.id}`, final);
@@ -145,7 +153,15 @@ function GerenciadorPacks({ usuario, lista, setTodos, meus, modoAdmin, novoPack,
       const novo = { ...final, assets: antigo ? antigo.assets : [] };
       return antigo ? l.map((x) => (x.id === final.id ? novo : x)) : [...l, novo];
     });
-    setEditPack(null);
+    if (manterAberto) {
+      setEditPack(final);
+      setAberto(final.id);
+      setRecemCriado(final.id);
+    } else {
+      setEditPack(null);
+      setRecemCriado(null);
+    }
+    return final;
   }
 
   async function excluirPack(p) {
@@ -232,8 +248,8 @@ function GerenciadorPacks({ usuario, lista, setTodos, meus, modoAdmin, novoPack,
               <View style={{ marginTop: 10 }}>
                 {editavel ? (
                   <View style={ps.acoesPack}>
-                    <BotaoMini icone="account-plus-outline" rotulo="Personagem" onPress={() => setEditFicha({ asset: { tipo: 'Inimigo', recursos: [{ nome: 'Vida', atual: 10, max: 10 }] }, pack: p })} />
-                    <BotaoMini icone="cube-outline" rotulo="Objeto" onPress={() => setEditObjeto({ asset: {}, pack: p })} />
+                    <BotaoMini icone="account-plus-outline" rotulo="Personagem (com ficha)" onPress={() => setEditFicha({ asset: { tipo: 'Inimigo', recursos: [{ nome: 'Vida', atual: 10, max: 10 }] }, pack: p })} />
+                    <BotaoMini icone="pine-tree" rotulo="Cenário" onPress={() => setEditObjeto({ asset: {}, pack: p })} />
                     <BotaoMini icone="import" rotulo="Dos meus assets" onPress={() => setImportarPara(p)} />
                   </View>
                 ) : (
@@ -270,12 +286,26 @@ function GerenciadorPacks({ usuario, lista, setTodos, meus, modoAdmin, novoPack,
 
       {editPack && (
         <EditorPack
+          key={editPack.id || 'novo'}
           pack={editPack}
           autor={usuario.nome}
           podePublicar={modoAdmin}
-          onSalvar={gravarPack}
+          recemCriado={recemCriado === editPack.id}
+          assets={editPack.id ? ((lista.find((x) => x.id === editPack.id) || {}).assets || []) : []}
+          onSalvar={(dados) => gravarPack(dados, !dados.id)}
           onExcluir={editPack.id ? () => excluirPack(editPack) : null}
-          onFechar={() => setEditPack(null)}
+          onNovoToken={() => setEditFicha({ asset: { tipo: 'Inimigo', recursos: [{ nome: 'Vida', atual: 10, max: 10 }] }, pack: editPack })}
+          onNovoObjeto={() => setEditObjeto({ asset: {}, pack: editPack })}
+          onImportar={() => setImportarPara(editPack)}
+          onAbrirAsset={(a) => {
+            if (a.tipo === 'personagem') setEditFicha({ asset: fichaDoAsset(a), pack: editPack });
+            else if (a.tipo === 'objeto') setEditObjeto({ asset: a, pack: editPack });
+            else setRenomear(a);
+          }}
+          onFechar={() => {
+            setEditPack(null);
+            setRecemCriado(null);
+          }}
         />
       )}
 
@@ -283,6 +313,7 @@ function GerenciadorPacks({ usuario, lista, setTodos, meus, modoAdmin, novoPack,
         <FichaVortex
           ficha={editFicha.asset}
           titulo={`Personagem · ${editFicha.pack.nome}`}
+          pastas={pastasDe(((lista.find((x) => x.id === editFicha.pack.id) || {}).assets || []).filter((a) => a.tipo === 'personagem'))}
           onSalvar={async (f) => {
             await gravarAsset(assetDaFicha(f, { pack: editFicha.pack.id }), editFicha.pack.id);
             setEditFicha(null);
@@ -303,6 +334,7 @@ function GerenciadorPacks({ usuario, lista, setTodos, meus, modoAdmin, novoPack,
         <EditorObjeto
           asset={editObjeto.asset}
           autor={usuario.nome}
+          pastas={pastasDe(((lista.find((x) => x.id === editObjeto.pack.id) || {}).assets || []).filter((a) => a.tipo === 'objeto'))}
           onSalvar={async (o) => {
             await gravarAsset(o, editObjeto.pack.id);
             setEditObjeto(null);
@@ -825,7 +857,15 @@ function CartaoRevisao({ pack, onDecidir }) {
   );
 }
 
-function EditorPack({ pack, autor, podePublicar, onSalvar, onExcluir, onFechar }) {
+// Resumo da ficha atrelada ao token (para a lista do editor de pack)
+function resumoFicha(a) {
+  const vida = (a.recursos || [])[0];
+  return `${a.categoria || 'Aliado'} · ${a.tamanho || 1}×${a.tamanho || 1} · C${a.corpo || 0} P${a.precisao || 0} E${a.essencia || 0}${
+    vida ? ` · ${vida.nome} ${vida.max}` : ''
+  }${(a.pericias || []).length ? ` · ${a.pericias.length} perícia(s)` : ''}`;
+}
+
+function EditorPack({ pack, autor, podePublicar, recemCriado, assets = [], onSalvar, onExcluir, onNovoToken, onNovoObjeto, onImportar, onAbrirAsset, onFechar }) {
   const [f, setF] = useState(pack);
   const [erro, setErro] = useState('');
   const [ocupado, setOcupado] = useState(false);
@@ -839,9 +879,13 @@ function EditorPack({ pack, autor, podePublicar, onSalvar, onExcluir, onFechar }
       await onSalvar({ ...f, nome: f.nome.trim(), descricao: (f.descricao || '').trim() });
     } catch (e) {
       setErro('Erro ao salvar.');
-      setOcupado(false);
     }
+    setOcupado(false);
   }
+
+  const personagens = assets.filter((a) => a.tipo === 'personagem');
+  const objetos = assets.filter((a) => a.tipo === 'objeto');
+  const outros = assets.filter((a) => a.tipo !== 'personagem' && a.tipo !== 'objeto');
 
   return (
     <Modal transparent animationType="fade" onRequestClose={onFechar}>
@@ -890,6 +934,74 @@ function EditorPack({ pack, autor, podePublicar, onSalvar, onExcluir, onFechar }
                 <Text style={[ps.btnUsarTxt, f.publicado && { color: '#fff' }]}>{f.publicado ? 'Publicado' : 'Rascunho (não publicado)'}</Text>
               </TouchableOpacity>
             )}
+
+            {/* tokens e fichas atrelados ao pack */}
+            {f.id ? (
+              <View style={ps.secaoAssets}>
+                {recemCriado && (
+                  <View style={ps.avisoNovo}>
+                    <Icone name="check-circle-outline" size={18} color={C.ok} />
+                    <Text style={ps.avisoNovoTxt}>Pack criado! Agora adicione os tokens e as fichas deles.</Text>
+                  </View>
+                )}
+                <Text style={ps.rotulo}>Adicionar ao pack</Text>
+                <View style={ps.escolhaTipo}>
+                  <TouchableOpacity style={[ps.opcaoTipo, { borderColor: C.destaque }]} onPress={onNovoToken}>
+                    <Icone name="account-plus-outline" size={26} color={C.destaque} />
+                    <Text style={ps.opcaoTipoTit}>Personagem</Text>
+                    <Text style={ps.opcaoTipoSub}>token + ficha Vortex</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[ps.opcaoTipo, { borderColor: C.ok }]} onPress={onNovoObjeto}>
+                    <Icone name="pine-tree" size={26} color={C.ok} />
+                    <Text style={ps.opcaoTipoTit}>Cenário</Text>
+                    <Text style={ps.opcaoTipoSub}>árvores, móveis, portas...</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity style={{ alignSelf: 'flex-start', marginTop: 6 }} onPress={onImportar}>
+                  <Text style={[ps.dica, { marginTop: 0, color: C.destaque2 }]}>+ Trazer de Meus assets (estruturas, mapas...)</Text>
+                </TouchableOpacity>
+
+                <Text style={ps.rotulo}>Personagens ({personagens.length})</Text>
+                {personagens.length === 0 && <Text style={[ps.dica, { marginTop: 0 }]}>Nenhum personagem ainda. Cada token tem a sua ficha.</Text>}
+                {agruparPorPasta(personagens).map((g) => (
+                  <View key={g.pasta}>
+                    <CabecalhoPasta nome={g.pasta} quantidade={g.itens.length} />
+                    {g.itens.map((a) => (
+                      <TouchableOpacity key={a.id} style={ps.assetLinha} onPress={() => onAbrirAsset(a)}>
+                        <AssetMini asset={a} tamanho={40} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={ps.assetNome}>{a.nome}</Text>
+                          <Text style={ps.assetInfo}>{resumoFicha(a)}</Text>
+                        </View>
+                        <Icone name="card-account-details-outline" size={18} color={C.destaque2} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ))}
+
+                <Text style={ps.rotulo}>Cenário ({objetos.length})</Text>
+                {objetos.length === 0 && <Text style={[ps.dica, { marginTop: 0 }]}>Nenhum item de cenário ainda.</Text>}
+                {agruparPorPasta(objetos).map((g) => (
+                  <View key={g.pasta}>
+                    <CabecalhoPasta nome={g.pasta} quantidade={g.itens.length} />
+                    <View style={ps.previa}>
+                      {g.itens.map((a) => (
+                        <TouchableOpacity key={a.id} onPress={() => onAbrirAsset(a)} style={{ alignItems: 'center', width: 58 }}>
+                          <AssetMini asset={a} tamanho={40} />
+                          <Text style={[ps.assetInfo, { textAlign: 'center' }]} numberOfLines={1}>{a.nome}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+                {outros.length > 0 && <Text style={ps.dica}>Também no pack: {contagem(outros)}.</Text>}
+              </View>
+            ) : (
+              <View style={[ps.avisoNovo, { marginTop: 14 }]}>
+                <Icone name="information-outline" size={18} color={C.destaque2} />
+                <Text style={ps.avisoNovoTxt}>Ao criar o pack, você já adiciona os tokens e as fichas atreladas a eles aqui mesmo.</Text>
+              </View>
+            )}
           </ScrollView>
           {!!erro && <Text style={ps.erro}>{erro}</Text>}
           <View style={ps.acoes}>
@@ -899,7 +1011,11 @@ function EditorPack({ pack, autor, podePublicar, onSalvar, onExcluir, onFechar }
               </TouchableOpacity>
             )}
             <TouchableOpacity style={[ps.btn, { backgroundColor: C.destaque }]} onPress={ok} disabled={ocupado}>
-              {ocupado ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Salvar</Text>}
+              {ocupado ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ color: '#fff', fontWeight: '700' }}>{f.id ? 'Salvar e fechar' : 'Criar e adicionar tokens'}</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -1008,4 +1124,13 @@ const ps = StyleSheet.create({
   iconeOp: { width: 38, height: 38, borderRadius: 8, borderWidth: 1, borderColor: C.borda, alignItems: 'center', justifyContent: 'center' },
   acoes: { flexDirection: 'row', gap: 8, marginTop: 14 },
   btn: { flex: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  secaoAssets: { marginTop: 14, borderTopWidth: 1, borderColor: C.borda, paddingTop: 4 },
+  avisoNovo: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.bg, borderRadius: 10, padding: 10, marginTop: 8 },
+  avisoNovoTxt: { color: C.texto, fontSize: 12, flex: 1 },
+  escolhaTipo: { flexDirection: 'row', gap: 8 },
+  opcaoTipo: { flex: 1, alignItems: 'center', borderWidth: 1, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 6, backgroundColor: C.bg },
+  opcaoTipoTit: { color: C.texto, fontWeight: '800', marginTop: 4 },
+  opcaoTipoSub: { color: C.suave, fontSize: 10, textAlign: 'center' },
+  btnToken: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: C.destaque, borderRadius: 10, paddingVertical: 10, marginTop: 6 },
+  btnTokenTxt: { color: '#fff', fontWeight: '800' },
 });

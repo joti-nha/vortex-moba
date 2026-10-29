@@ -10,7 +10,8 @@ import { TIPOS_ASSET } from '../data/constantes';
 import { Topo } from './Packs';
 import { assetDaFicha, assetsDe, carregarMeusAssets, fichaDoAsset, resumoAsset } from '../services/assets';
 import { apagar, salvar } from '../services/firestore';
-import { gerarId } from '../utils/util';
+import { SEM_PASTA, agruparPorPasta, gerarId, pastasDe } from '../utils/util';
+import { CabecalhoPasta } from '../components/CampoPasta';
 
 // "Meus assets": personagens (fichas), objetos, estruturas e mapas do próprio usuário
 export default function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
@@ -112,7 +113,10 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
               </TouchableOpacity>
             </View>
           )}
-          {filtrados.map((a) => (
+          {agruparPorPasta(filtrados).map((g) => (
+            <View key={g.pasta} style={{ gap: 10 }}>
+              {(g.pasta !== SEM_PASTA || filtrados.some((a) => a.pasta)) && <CabecalhoPasta nome={g.pasta} quantidade={g.itens.length} />}
+          {g.itens.map((a) => (
             <TouchableOpacity key={a.id} style={s.card} onPress={() => abrir(a)}>
               <AssetMini asset={a} tamanho={46} />
               <View style={{ flex: 1 }}>
@@ -126,6 +130,8 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
               </View>
               <Text style={[s.selo, a.origem ? s.seloPack : s.seloMeu]}>{a.origem ? 'de pack' : 'seu'}</Text>
             </TouchableOpacity>
+          ))}
+            </View>
           ))}
         </ScrollView>
       )}
@@ -141,6 +147,7 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
 
       {editFicha && (
         <FichaVortex
+          pastas={pastasDe(lista.filter((x) => x.tipo === 'personagem'))}
           ficha={editFicha}
           titulo={editFicha.origem ? 'Sua cópia (de um pack)' : 'Ficha Vortex'}
           onSalvar={async (f) => {
@@ -160,6 +167,7 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks }) {
       )}
       {editObjeto && (
         <EditorObjeto
+          pastas={pastasDe(lista.filter((x) => x.tipo === 'objeto'))}
           asset={editObjeto}
           autor={usuario.nome}
           onSalvar={async (o) => {

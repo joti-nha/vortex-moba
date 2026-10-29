@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Modal, Image, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons as Icone } from '@expo/vector-icons';
 import { CampoImagem } from './CampoImagem';
+import { CampoPasta } from './CampoPasta';
 import { C, CORES } from '../config/theme';
-import { apagar, salvar } from '../services/firestore';
 import { useImagem } from '../services/imagens';
 
 // ---------- Ficha reduzida do Vortex ----------
@@ -107,7 +107,8 @@ const d6 = () => 1 + Math.floor(Math.random() * 6);
 // Modal de edição/consulta da ficha.
 //  ficha: objeto da ficha · titulo · somenteLeitura · acaoExtra {rotulo, icone, onPress}
 //  onSalvar(ficha) · onApagar() opcional · onFechar() · onRolagem(texto) opcional
-export default function FichaVortex({ ficha, titulo, somenteLeitura, acaoExtra, onSalvar, onApagar, onFechar, onRolagem }) {
+// pastas: se informado, mostra a escolha de pasta (usado em packs e em Meus assets)
+export default function FichaVortex({ ficha, titulo, somenteLeitura, acaoExtra, onSalvar, onApagar, onFechar, onRolagem, pastas }) {
   const [f, setF] = useState(normalizarFicha(ficha));
   const [erro, setErro] = useState('');
   const [ocupado, setOcupado] = useState(false);
@@ -201,6 +202,39 @@ export default function FichaVortex({ ficha, titulo, somenteLeitura, acaoExtra, 
               />
             )}
 
+            {/* token */}
+            <Text style={s.secao}>Token (visual na mesa)</Text>
+            <View style={s.linhaWrap}>
+              {TIPOS.map((t) => (
+                <TouchableOpacity key={t} disabled={ro} onPress={() => set('tipo', t)} style={[s.chip, f.tipo === t && s.chipAtivo]}>
+                  <Icone name={ICONE_CATEGORIA[t]} size={13} color={f.tipo === t ? '#fff' : C.suave} />
+                  <Text style={[s.chipTxt, f.tipo === t && { color: '#fff' }]}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={[s.linhaWrap, { marginTop: 8 }]}>
+              {[1, 2, 3, 4].map((t) => (
+                <TouchableOpacity key={t} disabled={ro} onPress={() => set('tamanho', t)} style={[s.chip, f.tamanho === t && s.chipAtivo]}>
+                  <Text style={[s.chipTxt, f.tamanho === t && { color: '#fff' }]}>{t}×{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {!ro && (
+              <>
+                <View style={[s.linhaWrap, { marginTop: 8 }]}>
+                  {CORES.map((c) => (
+                    <TouchableOpacity key={c} onPress={() => set('cor', c)} style={[s.cor, { backgroundColor: c }, f.cor === c && s.corSel]} />
+                  ))}
+                </View>
+                <View style={{ marginTop: 10 }}>
+                  <CampoImagem valor={f.img} onMudar={(ref) => set('img', ref)} largura={256} rotulo="Imagem do token" redondo />
+                </View>
+              </>
+            )}
+            {!!pastas && !ro && <CampoPasta valor={f.pasta || ''} pastas={pastas} onMudar={(v) => set('pasta', v)} />}
+
+            {/* atributos (ficha) */}
+            <Text style={[s.secao, { color: C.destaque2, marginTop: 18 }]}>Ficha Vortex</Text>
             {/* atributos */}
             <Text style={s.secao}>Atributos</Text>
             <View style={s.linhaWrap}>
@@ -296,36 +330,6 @@ export default function FichaVortex({ ficha, titulo, somenteLeitura, acaoExtra, 
                 <Icone name="plus" size={14} color={C.destaque2} />
                 <Text style={s.addTxt}>Recurso</Text>
               </TouchableOpacity>
-            )}
-
-            {/* token */}
-            <Text style={s.secao}>Token</Text>
-            <View style={s.linhaWrap}>
-              {TIPOS.map((t) => (
-                <TouchableOpacity key={t} disabled={ro} onPress={() => set('tipo', t)} style={[s.chip, f.tipo === t && s.chipAtivo]}>
-                  <Icone name={ICONE_CATEGORIA[t]} size={13} color={f.tipo === t ? '#fff' : C.suave} />
-                  <Text style={[s.chipTxt, f.tipo === t && { color: '#fff' }]}>{t}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <View style={[s.linhaWrap, { marginTop: 8 }]}>
-              {[1, 2, 3, 4].map((t) => (
-                <TouchableOpacity key={t} disabled={ro} onPress={() => set('tamanho', t)} style={[s.chip, f.tamanho === t && s.chipAtivo]}>
-                  <Text style={[s.chipTxt, f.tamanho === t && { color: '#fff' }]}>{t}×{t}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {!ro && (
-              <>
-                <View style={[s.linhaWrap, { marginTop: 8 }]}>
-                  {CORES.map((c) => (
-                    <TouchableOpacity key={c} onPress={() => set('cor', c)} style={[s.cor, { backgroundColor: c }, f.cor === c && s.corSel]} />
-                  ))}
-                </View>
-                <View style={{ marginTop: 10 }}>
-                  <CampoImagem valor={f.img} onMudar={(ref) => set('img', ref)} largura={256} rotulo="Imagem do token" redondo />
-                </View>
-              </>
             )}
 
             {/* notas */}

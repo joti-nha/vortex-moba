@@ -14,7 +14,7 @@ import { lerPacksAtivos } from '../services/auth';
 import { COL, apagar, atualizar, lerDoc, listar, salvar } from '../services/firestore';
 import { encaixarPonto, lerGrade } from '../utils/grade';
 import { linkDaMesa } from '../utils/link';
-import { NOME_TIPO, caixa, contemPonto, gerarId, limitar, pathDosPontos } from '../utils/util';
+import { NOME_TIPO, caixa, contemPonto, gerarId, limitar, pastasDe, pathDosPontos } from '../utils/util';
 
 const INTERVALO = 1500; // ms entre sincronizações
 const JANELA = 4000; // ms em que uma alteração local tem prioridade sobre o servidor
@@ -69,6 +69,7 @@ export default function Mesa({ codigo, usuario, onSair, onEntrarConta }) {
   const [fontes, setFontes] = useState([]); // [{ id, nome, assets }]
   const [fonte, setFonte] = useState('rapido');
   const [tipoAsset, setTipoAsset] = useState('personagem');
+  const [pastaAsset, setPastaAsset] = useState(null); // filtro de pasta no navegador de assets
   const [modelo, setModelo] = useState(null);
   const [rapido, setRapido] = useState({ nome: '', tam: 1 });
   const [fichaDe, setFichaDe] = useState(null); // id do token com a ficha aberta
@@ -607,7 +608,10 @@ export default function Mesa({ codigo, usuario, onSair, onEntrarConta }) {
     const assetsFonte = fonteAtual ? fonteAtual.assets : [];
     const tiposDisp = TIPOS_ASSET.filter((t) => assetsFonte.some((a) => a.tipo === t.id));
     const tipoEfetivo = tiposDisp.some((t) => t.id === tipoAsset) ? tipoAsset : tiposDisp[0] ? tiposDisp[0].id : null;
-    const lista = assetsFonte.filter((a) => a.tipo === tipoEfetivo);
+    const doTipo = assetsFonte.filter((a) => a.tipo === tipoEfetivo);
+    const pastas = pastasDe(doTipo);
+    const pastaEfetiva = pastaAsset && pastas.includes(pastaAsset) ? pastaAsset : null;
+    const lista = pastaEfetiva ? doTipo.filter((a) => (a.pasta || '').trim() === pastaEfetiva) : doTipo;
     return (
       <View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.baseConteudo, { paddingBottom: 2, gap: 6 }]}>
@@ -642,12 +646,22 @@ export default function Mesa({ codigo, usuario, onSair, onEntrarConta }) {
           <View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.baseConteudo, { paddingVertical: 2, gap: 4 }]}>
               {tiposDisp.map((t) => (
-                <TouchableOpacity key={t.id} onPress={() => setTipoAsset(t.id)} style={[s.tipoChip, tipoEfetivo === t.id && s.tipoChipAtivo]}>
+                <TouchableOpacity key={t.id} onPress={() => { setTipoAsset(t.id); setPastaAsset(null); }} style={[s.tipoChip, tipoEfetivo === t.id && s.tipoChipAtivo]}>
                   <Icone name={t.icone} size={14} color={tipoEfetivo === t.id ? C.destaque2 : C.suave} />
                   <Text style={[s.tipoTxt, tipoEfetivo === t.id && { color: C.destaque2 }]}>{t.nome}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
+            {pastas.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.baseConteudo, { paddingVertical: 2, gap: 4 }]}>
+                {[null, ...pastas].map((p) => (
+                  <TouchableOpacity key={p || 'todas'} onPress={() => setPastaAsset(p)} style={[s.pastaChip, pastaEfetiva === p && s.pastaChipAtiva]}>
+                    <Icone name={p ? (pastaEfetiva === p ? 'folder-open' : 'folder-outline') : 'folder-multiple-outline'} size={13} color={pastaEfetiva === p ? '#fff' : C.suave} />
+                    <Text style={[s.pastaTxt, pastaEfetiva === p && { color: '#fff' }]}>{p || 'Todas'}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.baseConteudo, { gap: 8 }]}>
               {lista.length === 0 && (
                 <Text style={s.dica}>
@@ -1091,6 +1105,9 @@ const s = StyleSheet.create({
   tipoChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderBottomWidth: 2, borderColor: 'transparent' },
   tipoChipAtivo: { borderColor: C.destaque2 },
   tipoTxt: { color: C.suave, fontSize: 11, fontWeight: '700' },
+  pastaChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: C.borda },
+  pastaChipAtiva: { backgroundColor: C.destaque2, borderColor: C.destaque2 },
+  pastaTxt: { color: C.suave, fontSize: 11, fontWeight: '700' },
   assetBtn: { alignItems: 'center', width: 66, padding: 4, borderRadius: 10, borderWidth: 1, borderColor: 'transparent' },
   assetBtnAtivo: { borderColor: C.destaque2, backgroundColor: 'rgba(34,211,238,0.12)' },
   assetNome: { color: C.texto, fontSize: 10, marginTop: 3, textAlign: 'center' },
