@@ -1,6 +1,6 @@
 // MESA VORTEX — arquivo único gerado por scripts/arquivo-unico.js (não edite aqui; edite em src/)
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import Svg, { Path, Circle, Defs, LinearGradient, Stop, G, Rect, Pattern, Image as SvgImage, Text as SvgText, RadialGradient, Mask, Line, ClipPath } from 'react-native-svg';
+import Svg, { Path, Circle, Defs, LinearGradient, Stop, G, Rect, Pattern, Image as SvgImage, Text as SvgText, RadialGradient, Mask, ClipPath, Line } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator, ScrollView, Modal, PanResponder, Platform, Linking, Share, KeyboardAvoidingView, SafeAreaView, StatusBar } from 'react-native';
@@ -2070,6 +2070,45 @@ function EscuridaoSvg({ luzes, nivel, x, y, w, h }) {
   );
 }
 
+// Token simples (para o criador de mapas): círculo com cor, imagem ou iniciais
+function TokenSimplesSvg({ it }) {
+  const src = useImagem(it.img);
+  const r = it.r;
+  const clip = 'tkc_' + it.id;
+  return (
+    <G>
+      <Circle cx={it.x} cy={it.y + r * 0.08} r={r} fill="rgba(0,0,0,0.45)" />
+      <Circle cx={it.x} cy={it.y} r={r} fill={it.cor || '#8b5cf6'} />
+      {src ? (
+        <>
+          <Defs>
+            <ClipPath id={clip}>
+              <Circle cx={it.x} cy={it.y} r={r * 0.9} />
+            </ClipPath>
+          </Defs>
+          <SvgImage href={{ uri: src }} x={it.x - r} y={it.y - r} width={r * 2} height={r * 2} preserveAspectRatio="xMidYMid slice" clipPath={`url(#${clip})`} />
+        </>
+      ) : (
+        <SvgText x={it.x} y={it.y + r * 0.18} fontSize={r * 0.55} fontWeight="bold" fill="#fff" textAnchor="middle">
+          {(it.nome || '?').slice(0, 2).toUpperCase()}
+        </SvgText>
+      )}
+      <Circle cx={it.x} cy={it.y} r={r} fill="none" stroke="#fff" strokeWidth={r * 0.08} />
+    </G>
+  );
+}
+
+// Forma vinda de uma estrutura (retângulo, círculo ou desenho), em escala k
+function FormaSvg({ it }) {
+  const k = it.k || 1;
+  let corpo = null;
+  if (it.tipoForma === 'rect') corpo = <Rect x={0} y={0} width={it.w} height={it.h} fill={it.cor} fillOpacity={0.25} stroke={it.cor} strokeWidth={it.espessura || 3} />;
+  if (it.tipoForma === 'circle') corpo = <Circle cx={0} cy={0} r={it.r} fill={it.cor} fillOpacity={0.25} stroke={it.cor} strokeWidth={it.espessura || 3} />;
+  if (it.tipoForma === 'draw')
+    corpo = <Path d={it.d} fill="none" stroke={it.cor} strokeOpacity={it.opac || 1} strokeWidth={it.espessura || 4} strokeLinecap="round" strokeLinejoin="round" />;
+  return <G transform={`translate(${it.x} ${it.y}) scale(${k})`}>{corpo}</G>;
+}
+
 // ================================================================
 // src/utils/grade.js
 // ================================================================
@@ -2819,7 +2858,7 @@ function itensDaEstrutura(estr, x, y, cel, camada, autor) {
     const n = { ...it, id: gerarId(), camada, autor, z: z0 + i, x: x + it.x * k, y: y + it.y * k };
     if (n.w !== undefined) n.w = it.w * k;
     if (n.h !== undefined) n.h = it.h * k;
-    if (it.type === 'circle') n.r = it.r * k;
+    if (it.type === 'circle' || it.type === 'luz') n.r = it.r * k;
     if (it.type === 'draw' && k !== 1) n.escalaPath = (it.escalaPath || 1) * k;
     return n;
   });
@@ -6913,6 +6952,7 @@ const estPerfil = StyleSheet.create({
 // Criador de mapas no estilo do Dungeondraft:
 // gere masmorras, cavernas e labirintos; pinte salas e terrenos com textura; coloque objetos de cenário
 // dos seus packs; trace caminhos (estradas, rios); posicione luzes; trabalhe em vários andares;
+// use qualquer asset (cenário, personagens com ficha, estruturas inteiras);
 // importe mapas exportados do próprio Dungeondraft (.dd2vtt). Tudo é salvo em Meus assets › Mapas.
 
 const CEL_MUNDO = 70; // tamanho da célula quando o mapa vai para a mesa
@@ -6941,12 +6981,19 @@ const CORES_LUZ = ['#ffd27a', '#ffffff', '#ff8a3d', '#60a5fa', '#a78bfa', '#4ade
 const ABAS_CRIADOR = [
   { id: 'gerar', nome: 'Gerar', icone: 'auto-fix', ferramenta: 'mover' },
   { id: 'pintar', nome: 'Pintar', icone: 'brush', ferramenta: 'pincel' },
-  { id: 'cenario', nome: 'Cenário', icone: 'pine-tree', ferramenta: 'objeto' },
+  { id: 'cenario', nome: 'Assets', icone: 'package-variant', ferramenta: 'objeto' },
   { id: 'detalhes', nome: 'Caminhos e luzes', icone: 'lightbulb-on-outline', ferramenta: 'caminho' },
   { id: 'mapa', nome: 'Mapa', icone: 'layers-outline', ferramenta: 'mover' },
 ];
 const novaSemente = () => Math.floor(Math.random() * 1e9);
-const nivelVazio = (nome, cols, rows) => ({ nome, g: gradeVazia(cols, rows), objetos: [], caminhos: [], luzes: [] });
+const nivelVazio = (nome, cols, rows) => ({ nome, g: gradeVazia(cols, rows), objetos: [], caminhos: [], luzes: [], tokens: [], formas: [] });
+// lista de cada tipo de elemento colocado no mapa
+const LISTA = { objeto: 'objetos', luz: 'luzes', caminho: 'caminhos', token: 'tokens', forma: 'formas' };
+const TIPOS_USO = [
+  { id: 'objeto', nome: 'Cenário', icone: 'pine-tree' },
+  { id: 'personagem', nome: 'Personagens', icone: 'account-group-outline' },
+  { id: 'estrutura', nome: 'Estruturas', icone: 'home-city-outline' },
+];
 
 // Lê os dados de edição salvos (ou converte um mapa antigo, só com células)
 function carregarNiveis(asset) {
@@ -6957,10 +7004,12 @@ function carregarNiveis(asset) {
       objetos: n.objetos || [],
       caminhos: n.caminhos || [],
       luzes: n.luzes || [],
+      tokens: n.tokens || [],
+      formas: n.formas || [],
     }));
   }
   const tiles = asset && (asset.itens || []).find((i) => i.type === 'tiles');
-  if (tiles) return [{ nome: 'Térreo', g: deLinhas(tiles.linhas), objetos: [], caminhos: [], luzes: [] }];
+  if (tiles) return [{ nome: 'Térreo', g: deLinhas(tiles.linhas), objetos: [], caminhos: [], luzes: [], tokens: [], formas: [] }];
   return null;
 }
 
@@ -7010,6 +7059,7 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
   const [fonte, setFonte] = useState('meus');
   const [pastaObj, setPastaObj] = useState(null);
   const [modelo, setModelo] = useState(null);
+  const [tipoUso, setTipoUso] = useState('objeto');
 
   if (!niveis.current) {
     niveis.current = [{ ...nivelVazio('Térreo', 30, 20), g: GERADORES[0].gerar(30, 20, semente, { salas: 9 }) }];
@@ -7022,7 +7072,7 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
     (async () => {
       try {
         const [meus, packs, ativos] = await Promise.all([carregarMeusAssets(usuario.usuario), carregarTodosPacks(), lerPacksAtivos(usuario.usuario)]);
-        const objetos = (l) => l.filter((a) => a.tipo === 'objeto');
+        const objetos = (l) => l.filter((a) => a.tipo === 'objeto' || a.tipo === 'personagem' || a.tipo === 'estrutura');
         setFontes([
           { id: 'meus', nome: 'Meus assets', assets: objetos(meus) },
           ...packs
@@ -7089,7 +7139,7 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
 
   function limpar() {
     guardar();
-    Object.assign(N(), { g: gradeVazia(cols, rows), objetos: [], caminhos: [], luzes: [] });
+    Object.assign(N(), { g: gradeVazia(cols, rows), objetos: [], caminhos: [], luzes: [], tokens: [], formas: [] });
     setSel(null);
     atualizar();
   }
@@ -7130,7 +7180,7 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
   }
 
   // ---------- seleção ----------
-  const selecionado = sel && (N()[sel.tipo === 'objeto' ? 'objetos' : sel.tipo === 'luz' ? 'luzes' : 'caminhos'] || []).find((o) => o.id === sel.id);
+  const selecionado = sel && (N()[LISTA[sel.tipo]] || []).find((o) => o.id === sel.id);
   function alterarSel(fn) {
     if (!selecionado) return;
     guardar();
@@ -7140,7 +7190,7 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
   function apagarSel() {
     if (!sel) return;
     guardar();
-    const k = sel.tipo === 'objeto' ? 'objetos' : sel.tipo === 'luz' ? 'luzes' : 'caminhos';
+    const k = LISTA[sel.tipo];
     N()[k] = N()[k].filter((o) => o.id !== sel.id);
     setSel(null);
     atualizar();
@@ -7152,6 +7202,10 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
       const l = n.luzes[i];
       if (Math.hypot(c.x - l.x, c.y - l.y) < 0.6) return { tipo: 'luz', id: l.id };
     }
+    for (let i = n.tokens.length - 1; i >= 0; i--) {
+      const tk = n.tokens[i];
+      if (Math.hypot(c.x - tk.x, c.y - tk.y) <= tk.r) return { tipo: 'token', id: tk.id };
+    }
     for (let i = n.objetos.length - 1; i >= 0; i--) {
       const o = n.objetos[i];
       if (c.x >= o.x && c.x <= o.x + o.w && c.y >= o.y && c.y <= o.y + o.h) return { tipo: 'objeto', id: o.id };
@@ -7160,7 +7214,57 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
       const cm = n.caminhos[i];
       if (cm.pts.some((p) => Math.hypot(c.x - p.x, c.y - p.y) < Math.max(0.6, cm.largura))) return { tipo: 'caminho', id: cm.id };
     }
+    for (let i = n.formas.length - 1; i >= 0; i--) {
+      const fm = n.formas[i];
+      const b = fm.caixa || { x: 0, y: 0, w: 1, h: 1 };
+      if (c.x >= fm.x + b.x && c.x <= fm.x + b.x + b.w && c.y >= fm.y + b.y && c.y <= fm.y + b.y + b.h) return { tipo: 'forma', id: fm.id };
+    }
     return null;
+  }
+
+  // Personagem vira token (com ficha); estrutura é "carimbada" com todos os seus elementos
+  function colocarAsset(m, p, n, enc) {
+    if (m.tipo === 'personagem') {
+      const tam = m.tamanho || 1;
+      const meio = tam % 2 ? 0.5 : 0;
+      const tk = {
+        id: gerarId(),
+        x: enc ? Math.floor(p.x - meio + 0.5) + meio : p.x,
+        y: enc ? Math.floor(p.y - meio + 0.5) + meio : p.y,
+        tam,
+        r: tam * 0.45,
+        cor: m.cor || '#8b5cf6',
+        img: m.img || '',
+        nome: m.nome,
+        ficha: dadosDeJogo({ ...m, tipo: m.categoria }),
+      };
+      n.tokens.push(tk);
+      setSel({ tipo: 'token', id: tk.id });
+      return;
+    }
+    // estrutura: unidades originais -> células
+    const k = 1 / (m.cel || CEL_MUNDO);
+    const w = (m.w || 0) * k;
+    const h = (m.h || 0) * k;
+    const x0 = enc ? Math.round(p.x - w / 2) : p.x - w / 2;
+    const y0 = enc ? Math.round(p.y - h / 2) : p.y - h / 2;
+    (m.itens || []).forEach((it) => {
+      const x = x0 + it.x * k;
+      const y = y0 + it.y * k;
+      if (it.type === 'prop') n.objetos.push({ id: gerarId(), x, y, w: it.w * k, h: it.h * k, rot: it.rot || 0, emoji: it.emoji || '', img: it.img || '', nome: it.rotulo || '' });
+      else if (it.type === 'luz') n.luzes.push({ id: gerarId(), x, y, r: it.r * k, cor: it.cor, intensidade: it.intensidade || 1 });
+      else if (it.type === 'token')
+        n.tokens.push({ id: gerarId(), x, y, tam: it.tam || 1, r: (it.tam || 1) * 0.45, cor: it.cor, img: it.img || '', nome: it.rotulo || '', ficha: it.ficha || null });
+      else if (it.type === 'rect' || it.type === 'circle' || it.type === 'draw') {
+        const sp = it.escalaPath || 1;
+        const caixa =
+          it.type === 'circle'
+            ? { x: -it.r * k, y: -it.r * k, w: it.r * 2 * k, h: it.r * 2 * k }
+            : { x: 0, y: 0, w: (it.w || 0) * k * (it.type === 'draw' ? sp : 1), h: (it.h || 0) * k * (it.type === 'draw' ? sp : 1) };
+        n.formas.push({ id: gerarId(), tipoForma: it.type, x, y, k: k * (it.type === 'draw' ? sp : 1), w: it.w, h: it.h, r: it.r, d: it.d, cor: it.cor, espessura: it.espessura, opac: it.opac, caixa });
+      }
+    });
+    avisar(`"${m.nome}" colocada (${(m.itens || []).length} elementos)`);
   }
 
   // ---------- gestos ----------
@@ -7220,7 +7324,12 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
         }
         if (f === 'objeto') {
           const m = st.modelo;
-          if (!m) return avisar('Escolha um objeto na lista abaixo');
+          if (!m) return avisar('Escolha um asset na lista abaixo');
+          if (m.tipo === 'personagem' || m.tipo === 'estrutura') {
+            guardar();
+            colocarAsset(m, p, n, st.encaixar);
+            return atualizar();
+          }
           guardar();
           const w = m.w || 1;
           const h = m.h || 1;
@@ -7246,7 +7355,7 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
           setSel(hit);
           if (hit) {
             guardar();
-            const lista = hit.tipo === 'objeto' ? n.objetos : hit.tipo === 'luz' ? n.luzes : n.caminhos;
+            const lista = n[LISTA[hit.tipo]];
             const alvo = lista.find((o) => o.id === hit.id);
             gesto.current.alvo = alvo;
             gesto.current.orig = hit.tipo === 'caminho' ? alvo.pts.map((q) => ({ ...q })) : { x: alvo.x, y: alvo.y };
@@ -7329,8 +7438,12 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
           atualizar();
         }
         const alvo = gesto.current.alvo;
-        if (st.ferramenta === 'selecionar' && alvo && st.encaixar && !alvo.pts) {
-          if (alvo.w !== undefined) {
+        if (st.ferramenta === 'selecionar' && alvo && st.encaixar && !alvo.pts && !alvo.tipoForma) {
+          if (alvo.tam) {
+            const meio = alvo.tam % 2 ? 0.5 : 0;
+            alvo.x = Math.floor(alvo.x - meio + 0.5) + meio;
+            alvo.y = Math.floor(alvo.y - meio + 0.5) + meio;
+          } else if (alvo.w !== undefined) {
             alvo.x = Math.round(alvo.x);
             alvo.y = Math.round(alvo.y);
           } else {
@@ -7409,6 +7522,16 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
       n.luzes.forEach((l) =>
         itens.push({ type: 'luz', camada: `n${i}o`, z: z++, x: l.x * K, y: l.y * K, r: l.r * K, cor: l.cor, intensidade: l.intensidade || 1, rotulo: 'Luz' })
       );
+      (n.formas || []).forEach((fm) => {
+        const f = fm.k * K;
+        const base = { camada: `n${i}`, z: z++, cor: fm.cor, rotulo: 'Forma' };
+        if (fm.tipoForma === 'rect') itens.push({ ...base, type: 'rect', x: fm.x * K, y: fm.y * K, w: fm.w * f, h: fm.h * f, espessura: (fm.espessura || 3) * f });
+        if (fm.tipoForma === 'circle') itens.push({ ...base, type: 'circle', x: fm.x * K, y: fm.y * K, r: fm.r * f, espessura: (fm.espessura || 3) * f });
+        if (fm.tipoForma === 'draw') itens.push({ ...base, type: 'draw', x: fm.x * K, y: fm.y * K, w: fm.w, h: fm.h, d: fm.d, escalaPath: f, espessura: fm.espessura || 4, opac: fm.opac });
+      });
+      (n.tokens || []).forEach((tk) =>
+        itens.push({ type: 'token', camada: `n${i}o`, z: z++, x: tk.x * K, y: tk.y * K, tam: tk.tam, cor: tk.cor, img: tk.img || '', rotulo: tk.nome || '', ...(tk.ficha ? { ficha: tk.ficha } : {}) })
+      );
     });
     camadas.push({ chave: 'tokens', nome: 'Tokens', ordem: niveis.current.length * 2, visivel: true, travada: false });
     return {
@@ -7437,7 +7560,7 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
         tema,
         mostrarGrade,
         textura,
-        niveis: niveis.current.map((n) => ({ nome: n.nome, linhas: paraLinhas(n.g), objetos: n.objetos, caminhos: n.caminhos, luzes: n.luzes })),
+        niveis: niveis.current.map((n) => ({ nome: n.nome, linhas: paraLinhas(n.g), objetos: n.objetos, caminhos: n.caminhos, luzes: n.luzes, tokens: n.tokens || [], formas: n.formas || [] })),
       },
       autor: base.autor || usuario.nome,
       criadoEm: base.criadoEm || Date.now(),
@@ -7480,7 +7603,7 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
   const n = N();
   const pisoTotal = linhas.join('').split('').filter(ehPiso).length;
   const fonteAtual = fontes.find((f) => f.id === fonte) || fontes[0];
-  const objsFonte = fonteAtual ? fonteAtual.assets : [];
+  const objsFonte = (fonteAtual ? fonteAtual.assets : []).filter((a) => a.tipo === tipoUso);
   const pastas = pastasDe(objsFonte);
   const objsVisiveis = pastaObj ? objsFonte.filter((a) => (a.pasta || '').trim() === pastaObj) : objsFonte;
 
@@ -7531,8 +7654,14 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
                 {n.caminhos.map((cm) => (
                   <Path key={cm.id} d={caminhoD(cm.pts)} stroke={cm.cor} strokeOpacity={cm.opac || 1} strokeWidth={cm.largura} strokeLinecap="round" strokeLinejoin="round" fill="none" />
                 ))}
+                {(n.formas || []).map((fm) => (
+                  <FormaSvg key={fm.id} it={fm} />
+                ))}
                 {n.objetos.map((o) => (
                   <PropSvg key={o.id} it={o} />
+                ))}
+                {(n.tokens || []).map((tk) => (
+                  <TokenSimplesSvg key={tk.id} it={tk} />
                 ))}
                 {n.luzes.map((l) => (
                   <LuzSvg key={l.id} it={l} escala={view.s} mostrarCentro />
@@ -7563,6 +7692,12 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
                 )}
                 {selecionado && sel.tipo === 'objeto' && (
                   <Rect x={selecionado.x - 0.1} y={selecionado.y - 0.1} width={selecionado.w + 0.2} height={selecionado.h + 0.2} fill="none" stroke={C.destaque2} strokeWidth={2 / view.s} strokeDasharray={`${6 / view.s} ${4 / view.s}`} />
+                )}
+                {selecionado && sel.tipo === 'token' && (
+                  <Rect x={selecionado.x - selecionado.r - 0.1} y={selecionado.y - selecionado.r - 0.1} width={selecionado.r * 2 + 0.2} height={selecionado.r * 2 + 0.2} fill="none" stroke={C.destaque2} strokeWidth={2 / view.s} strokeDasharray={`${6 / view.s} ${4 / view.s}`} />
+                )}
+                {selecionado && sel.tipo === 'forma' && (
+                  <Rect x={selecionado.x + selecionado.caixa.x} y={selecionado.y + selecionado.caixa.y} width={selecionado.caixa.w} height={selecionado.caixa.h} fill="none" stroke={C.destaque2} strokeWidth={2 / view.s} strokeDasharray={`${6 / view.s} ${4 / view.s}`} />
                 )}
                 {selecionado && sel.tipo === 'luz' && (
                   <Rect x={selecionado.x - 0.6} y={selecionado.y - 0.6} width={1.2} height={1.2} fill="none" stroke={C.destaque2} strokeWidth={2 / view.s} strokeDasharray={`${6 / view.s} ${4 / view.s}`} />
@@ -7600,7 +7735,19 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
         {/* ações do item selecionado */}
         {selecionado && (aba === 'cenario' || aba === 'detalhes') && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[estCriadorMapas.faixa, { borderBottomWidth: 1, borderColor: C.borda }]}>
-            <Text style={estCriadorMapas.selTxt}>{sel.tipo === 'objeto' ? selecionado.nome || 'Objeto' : sel.tipo === 'luz' ? 'Luz' : selecionado.nome || 'Caminho'}</Text>
+            <Text style={estCriadorMapas.selTxt}>
+              {sel.tipo === 'luz' ? 'Luz' : sel.tipo === 'forma' ? 'Forma' : selecionado.nome || (sel.tipo === 'objeto' ? 'Objeto' : sel.tipo === 'token' ? 'Token' : 'Caminho')}
+            </Text>
+            {sel.tipo === 'token' && (
+              <>
+                {[1, 2, 3, 4].map((t2) => (
+                  <TouchableOpacity key={t2} onPress={() => alterarSel((tk) => { tk.tam = t2; tk.r = t2 * 0.45; })} style={[estCriadorMapas.chip, selecionado.tam === t2 && estCriadorMapas.chipAtivo]}>
+                    <Text style={estCriadorMapas.chipTxt}>{t2}×</Text>
+                  </TouchableOpacity>
+                ))}
+                {!!selecionado.ficha && <Text style={estCriadorMapas.dica}>com ficha</Text>}
+              </>
+            )}
             {sel.tipo === 'objeto' && (
               <>
                 <OpcaoCriador icone="rotate-left" rotulo="-45°" onPress={() => alterarSel((o) => (o.rot = ((o.rot || 0) - 45) % 360))} />
@@ -7699,6 +7846,9 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
               <OpcaoCriador ativo={ferramenta === 'objeto'} icone="stamper" rotulo="Colocar" onPress={() => setFerramenta('objeto')} />
               <OpcaoCriador ativo={ferramenta === 'selecionar'} icone="cursor-default-click-outline" rotulo="Selecionar" onPress={() => setFerramenta('selecionar')} />
               <OpcaoCriador ativo={encaixar} icone="magnet" rotulo="Encaixar" onPress={() => setEncaixar(!encaixar)} />
+              {TIPOS_USO.map((tu) => (
+                <OpcaoCriador key={tu.id} ativo={tipoUso === tu.id} icone={tu.icone} rotulo={tu.nome} onPress={() => { setTipoUso(tu.id); setPastaObj(null); setModelo(null); setFerramenta('objeto'); }} />
+              ))}
               {fontes.map((f) => (
                 <TouchableOpacity key={f.id} onPress={() => { setFonte(f.id); setPastaObj(null); }} style={[estCriadorMapas.chipAndar, fonteAtual && fonteAtual.id === f.id && estCriadorMapas.chipAndarAtivo]}>
                   <Text style={[estCriadorMapas.chipTxt, fonteAtual && fonteAtual.id === f.id && { color: '#fff' }]} numberOfLines={1}>{f.nome}</Text>
@@ -7716,7 +7866,11 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
               </ScrollView>
             )}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[estCriadorMapas.faixa, { paddingTop: 0 }]}>
-              {objsVisiveis.length === 0 && <Text style={estCriadorMapas.dica}>Nenhum item de cenário. Crie em Meus assets › Cenário ou ative packs.</Text>}
+              {objsVisiveis.length === 0 && (
+                <Text style={estCriadorMapas.dica}>
+                  Nada em {TIPOS_USO.find((x) => x.id === tipoUso).nome.toLowerCase()} nesta fonte. Crie em Meus assets, monte estruturas na mesa (aba Construir) ou ative packs.
+                </Text>
+              )}
               {objsVisiveis.map((a) => (
                 <TouchableOpacity
                   key={a.id}

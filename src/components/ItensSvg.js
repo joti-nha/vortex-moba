@@ -1,7 +1,7 @@
 // Peças de SVG compartilhadas entre a mesa (Palco) e o criador de mapas:
 // objetos de cenário, luzes e a camada de escuridão.
 import React from 'react';
-import { G, Circle, Rect, Image as SvgImage, Text as SvgText, Defs, RadialGradient, Stop, Mask } from 'react-native-svg';
+import { G, Circle, Rect, Path, Image as SvgImage, Text as SvgText, Defs, RadialGradient, Stop, Mask, ClipPath } from 'react-native-svg';
 import { useImagem } from '../services/imagens';
 
 // Objeto (adereço): imagem ou ícone emoji, ocupando w×h, com rotação
@@ -64,4 +64,43 @@ export function EscuridaoSvg({ luzes, nivel, x, y, w, h }) {
       <Rect x={x} y={y} width={w} height={h} fill="#000000" opacity={nivel} mask="url(#mascaraEscuro)" />
     </G>
   );
+}
+
+// Token simples (para o criador de mapas): círculo com cor, imagem ou iniciais
+export function TokenSimplesSvg({ it }) {
+  const src = useImagem(it.img);
+  const r = it.r;
+  const clip = 'tkc_' + it.id;
+  return (
+    <G>
+      <Circle cx={it.x} cy={it.y + r * 0.08} r={r} fill="rgba(0,0,0,0.45)" />
+      <Circle cx={it.x} cy={it.y} r={r} fill={it.cor || '#8b5cf6'} />
+      {src ? (
+        <>
+          <Defs>
+            <ClipPath id={clip}>
+              <Circle cx={it.x} cy={it.y} r={r * 0.9} />
+            </ClipPath>
+          </Defs>
+          <SvgImage href={{ uri: src }} x={it.x - r} y={it.y - r} width={r * 2} height={r * 2} preserveAspectRatio="xMidYMid slice" clipPath={`url(#${clip})`} />
+        </>
+      ) : (
+        <SvgText x={it.x} y={it.y + r * 0.18} fontSize={r * 0.55} fontWeight="bold" fill="#fff" textAnchor="middle">
+          {(it.nome || '?').slice(0, 2).toUpperCase()}
+        </SvgText>
+      )}
+      <Circle cx={it.x} cy={it.y} r={r} fill="none" stroke="#fff" strokeWidth={r * 0.08} />
+    </G>
+  );
+}
+
+// Forma vinda de uma estrutura (retângulo, círculo ou desenho), em escala k
+export function FormaSvg({ it }) {
+  const k = it.k || 1;
+  let corpo = null;
+  if (it.tipoForma === 'rect') corpo = <Rect x={0} y={0} width={it.w} height={it.h} fill={it.cor} fillOpacity={0.25} stroke={it.cor} strokeWidth={it.espessura || 3} />;
+  if (it.tipoForma === 'circle') corpo = <Circle cx={0} cy={0} r={it.r} fill={it.cor} fillOpacity={0.25} stroke={it.cor} strokeWidth={it.espessura || 3} />;
+  if (it.tipoForma === 'draw')
+    corpo = <Path d={it.d} fill="none" stroke={it.cor} strokeOpacity={it.opac || 1} strokeWidth={it.espessura || 4} strokeLinecap="round" strokeLinejoin="round" />;
+  return <G transform={`translate(${it.x} ${it.y}) scale(${k})`}>{corpo}</G>;
 }

@@ -98,7 +98,7 @@ export function itensDaEstrutura(estr, x, y, cel, camada, autor) {
     const n = { ...it, id: gerarId(), camada, autor, z: z0 + i, x: x + it.x * k, y: y + it.y * k };
     if (n.w !== undefined) n.w = it.w * k;
     if (n.h !== undefined) n.h = it.h * k;
-    if (it.type === 'circle') n.r = it.r * k;
+    if (it.type === 'circle' || it.type === 'luz') n.r = it.r * k;
     if (it.type === 'draw' && k !== 1) n.escalaPath = (it.escalaPath || 1) * k;
     return n;
   });
