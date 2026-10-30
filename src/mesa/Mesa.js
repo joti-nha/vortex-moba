@@ -9,6 +9,7 @@ import { TIPOS_ASSET } from '../data/constantes';
 import ConfigMesa from './ConfigMesa';
 import PainelCamadas from './PainelCamadas';
 import Palco from './Palco';
+import { escolherArquivoVtt, importarVtt } from '../services/dungeondraft';
 import { assetsDe, carregarMeusAssets, carregarTodosPacks, estruturaDosItens, itensDaEstrutura, mapaDaMesa, packEstaAtivo, packVisivelPara, resumoAsset } from '../services/assets';
 import { lerPacksAtivos } from '../services/auth';
 import { COL, apagar, atualizar, lerDoc, listar, salvar } from '../services/firestore';
@@ -35,6 +36,7 @@ const DICA_FERRAMENTA = {
   retangulo: 'Arraste para desenhar um retângulo.',
   circulo: 'Arraste do centro para fora para desenhar um círculo.',
   borracha: 'Toque ou arraste sobre os itens para apagar.',
+  luz: 'Toque no mapa para colocar uma luz. Use a Escuridão (aba Grade) para ver o efeito.',
   capturar: 'Arraste um retângulo sobre os itens que formam a estrutura.',
 };
 
@@ -259,6 +261,11 @@ export default function Mesa({ codigo, usuario, onSair, onEntrarConta, onCriarMa
   }
 
   function colocar(p) {
+    if (ferramenta === 'luz') {
+      if (!camadaPodeReceber()) return;
+      salvarItem({ ...novoBase(), type: 'luz', x: p.x, y: p.y, r: cel * 4, intensidade: 1, cor: cor === CORES[7] ? '#ffd27a' : cor, rotulo: 'Luz' });
+      return;
+    }
     if (!modelo) {
       // token rápido
       if (!camadaPodeReceber()) return;
@@ -332,6 +339,20 @@ export default function Mesa({ codigo, usuario, onSair, onEntrarConta, onCriarMa
     });
     if (!dentro.length) return avisar('Nenhum item dentro da área');
     setCaptura(dentro);
+  }
+
+  async function importarDungeondraft() {
+    try {
+      const arq = await escolherArquivoVtt();
+      if (!arq) return;
+      avisar('Importando mapa do Dungeondraft...', 8000);
+      const m = await importarVtt(arq, { usuario, aoProgresso: (t) => avisar(t, 8000) });
+      setFontes((f) => f.map((x) => (x.id === 'meus' ? { ...x, assets: [...x.assets, m] } : x)));
+      avisar(`"${m.nome}" importado`);
+      setMapaPendente(m);
+    } catch (e) {
+      avisar(e.message || 'Não foi possível importar o arquivo', 5000);
+    }
   }
 
   async function salvarMeuAsset(dados) {
@@ -563,6 +584,7 @@ export default function Mesa({ codigo, usuario, onSair, onEntrarConta, onCriarMa
               ['retangulo', 'square-outline', 'Retângulo'],
               ['circulo', 'circle-outline', 'Círculo'],
               ['borracha', 'eraser', 'Borracha'],
+              ['luz', 'lightbulb-on-outline', 'Luz'],
             ]}
             atual={ferramenta}
             onEscolher={setFerramenta}
@@ -595,6 +617,10 @@ export default function Mesa({ codigo, usuario, onSair, onEntrarConta, onCriarMa
           <TouchableOpacity style={s.btnGrande} onPress={() => setSalvandoMapa(true)}>
             <Icone name="content-save-outline" size={20} color={C.destaque2} />
             <Text style={s.btnGrandeTxt}>Salvar mesa como mapa</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.btnGrande} onPress={importarDungeondraft}>
+            <Icone name="file-import-outline" size={20} color={C.destaque2} />
+            <Text style={s.btnGrandeTxt}>Importar Dungeondraft (.dd2vtt)</Text>
           </TouchableOpacity>
           {!!onCriarMapa && (
             <TouchableOpacity style={s.btnGrande} onPress={onCriarMapa}>
@@ -751,6 +777,7 @@ export default function Mesa({ codigo, usuario, onSair, onEntrarConta, onCriarMa
       {/* ---------- palco ---------- */}
       <View style={{ flex: 1 }}>
         <Palco
+          mostrarLuzes={mestre}
           sala={sala}
           itens={itensVisiveis}
           view={view}
@@ -989,6 +1016,13 @@ function PainelGrade({ g, mestre, onMudar }) {
         />
         <Passo rotulo="Deslocar X" valor={g.offX} desativado={d} onMenos={() => onMudar({ offX: g.offX - 5 })} onMais={() => onMudar({ offX: g.offX + 5 })} />
         <Passo rotulo="Deslocar Y" valor={g.offY} desativado={d} onMenos={() => onMudar({ offY: g.offY - 5 })} onMais={() => onMudar({ offY: g.offY + 5 })} />
+        <Passo
+          rotulo="Escuridão"
+          valor={`${Math.round((g.escuridao || 0) * 100)}%`}
+          desativado={d}
+          onMenos={() => onMudar({ escuridao: Math.max(0, Math.round(((g.escuridao || 0) - 0.1) * 10) / 10) })}
+          onMais={() => onMudar({ escuridao: Math.min(0.95, Math.round(((g.escuridao || 0) + 0.1) * 10) / 10) })}
+        />
         <View style={s.grupo}>
           {CORES_GRADE.map((c) => (
             <TouchableOpacity key={c} disabled={d} onPress={() => onMudar({ corGrade: c })} style={[s.cor, { backgroundColor: c }, g.corGrade === c && s.corSel]} />
@@ -1042,6 +1076,19 @@ function Inspetor({ it, camada, cel, onSalvar, onFicha, onApagar, onFrente, onTr
               <Text style={s.chipTxt}>{t}×</Text>
             </TouchableOpacity>
           ))}
+        </View>
+      )}
+
+      {it.type === 'luz' && (
+        <View style={s.grupo}>
+          <BtnIns icone="minus-circle-outline" rotulo="Raio −" onPress={() => onSalvar({ ...it, r: Math.max(cel, it.r - cel) })} />
+          <Text style={s.recVal}>{Math.round(it.r / cel)} cél.</Text>
+          <BtnIns icone="plus-circle-outline" rotulo="Raio +" onPress={() => onSalvar({ ...it, r: it.r + cel })} />
+          <BtnIns
+            icone="brightness-6"
+            rotulo={`${Math.round((it.intensidade || 1) * 100)}%`}
+            onPress={() => onSalvar({ ...it, intensidade: (it.intensidade || 1) >= 1 ? 0.4 : Math.round(((it.intensidade || 1) + 0.2) * 10) / 10 })}
+          />
         </View>
       )}
 

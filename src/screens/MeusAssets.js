@@ -10,6 +10,7 @@ import { TIPOS_ASSET } from '../data/constantes';
 import { Topo } from './Packs';
 import { assetDaFicha, assetsDe, carregarMeusAssets, fichaDoAsset, resumoAsset } from '../services/assets';
 import { apagar, salvar } from '../services/firestore';
+import { escolherArquivoVtt, importarVtt } from '../services/dungeondraft';
 import { SEM_PASTA, agruparPorPasta, gerarId, pastasDe } from '../utils/util';
 import { CabecalhoPasta } from '../components/CampoPasta';
 
@@ -53,6 +54,21 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks, onCriarMap
   async function remover(asset) {
     await apagar(`${caminho}/${asset.id}`);
     setLista((l) => l.filter((x) => x.id !== asset.id));
+  }
+
+  const [importando, setImportando] = useState(false);
+  async function importarDD() {
+    setErro('');
+    try {
+      const arq = await escolherArquivoVtt();
+      if (!arq) return;
+      setImportando(true);
+      const m = await importarVtt(arq, { usuario });
+      setLista((l) => porNome([...l, m]));
+    } catch (e) {
+      setErro(e.message || 'Não foi possível importar o mapa do Dungeondraft.');
+    }
+    setImportando(false);
   }
 
   function abrir(a) {
@@ -106,7 +122,7 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks, onCriarMap
               <Text style={s.vazio}>Nada em {tipoAtual.nome.toLowerCase()} ainda.</Text>
               <Text style={s.vazioSub}>
                 {aba === 'mapa'
-                  ? 'Crie no botão + (criador de mapas), salve a mesa pela aba Construir ou copie de um pack.'
+                  ? 'Crie no botão + (criador de mapas), importe do Dungeondraft (botão de cima), salve a mesa pela aba Construir ou copie de um pack.'
                   : aba === 'estrutura'
                   ? 'Monte na mesa e salve pela aba Construir, ou copie de um pack.'
                   : 'Crie no botão + ou copie de um pack.'}
@@ -142,6 +158,11 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks, onCriarMap
       {aba === 'mapa' && !!onCriarMapa && (
         <TouchableOpacity style={s.fab} onPress={() => onCriarMapa(null)}>
           <Icone name="map-plus" size={26} color="#fff" />
+        </TouchableOpacity>
+      )}
+      {aba === 'mapa' && (
+        <TouchableOpacity style={[s.fab, { bottom: 92, backgroundColor: C.painel2, borderWidth: 1, borderColor: C.destaque2 }]} onPress={importarDD}>
+          {importando ? <ActivityIndicator color={C.destaque2} /> : <Icone name="file-import-outline" size={24} color={C.destaque2} />}
         </TouchableOpacity>
       )}
       {(aba === 'personagem' || aba === 'objeto') && (

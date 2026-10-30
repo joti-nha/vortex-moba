@@ -4,6 +4,7 @@ import Svg, { G, Rect, Circle, Line, Path, Image as SvgImage, Text as SvgText, D
 import { C } from '../config/theme';
 import { useImagem } from '../services/imagens';
 import { MapaTilesSvg } from '../components/MapaTiles';
+import { PropSvg, LuzSvg, EscuridaoSvg } from '../components/ItensSvg';
 import { caminhoGrade, lerGrade } from '../utils/grade';
 import { caixa, limitar } from '../utils/util';
 
@@ -94,6 +95,7 @@ export default function Palco(props) {
             setRascunho({ type: st.tipo, a: w, b: w });
             break;
           case 'colocar':
+          case 'luz':
             st.modo = 'colocar';
             break;
           case 'borracha': {
@@ -241,8 +243,18 @@ export default function Palco(props) {
 
             {/* itens já ordenados por camada e z */}
             {itens.map((it) => (
-              <Item key={it.id} it={it} escala={view.s} />
+              <Item key={it.id} it={it} escala={view.s} mostrarLuzes={props.mostrarLuzes} />
             ))}
+
+            {/* escuridão com as luzes abrindo a visão */}
+            <EscuridaoSvg
+              nivel={sala.escuridao || 0}
+              luzes={itens.filter((i) => i.type === 'luz')}
+              x={bx0 - bloco}
+              y={by0 - bloco}
+              w={bx1 - bx0 + bloco * 2}
+              h={by1 - by0 + bloco * 2}
+            />
 
             {/* rascunho do que está sendo desenhado */}
             {rascunho && <Rascunho r={rascunho} cor={cor} espessura={espessura} escala={view.s} />}
@@ -267,14 +279,16 @@ export default function Palco(props) {
   );
 }
 
-function Item({ it, escala }) {
+function Item({ it, escala, mostrarLuzes }) {
   switch (it.type) {
     case 'token':
       return <TokenItem it={it} escala={escala} />;
     case 'tiles':
-      return <MapaTilesSvg linhas={it.linhas} cel={it.cel || 70} tema={it.tema} mostrarGrade={it.mostrarGrade !== false} x={it.x} y={it.y} />;
+      return <MapaTilesSvg linhas={it.linhas} cel={it.cel || 70} tema={it.tema} mostrarGrade={it.mostrarGrade !== false} textura={it.textura !== false} x={it.x} y={it.y} />;
     case 'prop':
-      return <PropItem it={it} />;
+      return <PropSvg it={it} />;
+    case 'luz':
+      return <LuzSvg it={it} escala={escala} mostrarCentro={mostrarLuzes} />;
     case 'rect':
       return (
         <Rect
@@ -306,6 +320,7 @@ function Item({ it, escala }) {
           <Path
             d={it.d}
             fill="none"
+            strokeOpacity={it.opac || 1}
             stroke={it.cor}
             strokeWidth={it.espessura || 4}
             strokeLinecap="round"
@@ -361,24 +376,6 @@ function TokenItem({ it, escala }) {
           textAnchor="middle"
         >
           {it.rotulo}
-        </SvgText>
-      )}
-    </G>
-  );
-}
-
-// Objeto (adereço): imagem ou ícone emoji, ocupando w×h, com rotação
-function PropItem({ it }) {
-  const src = useImagem(it.img);
-  const cx = it.x + it.w / 2;
-  const cy = it.y + it.h / 2;
-  return (
-    <G transform={it.rot ? `rotate(${it.rot} ${cx} ${cy})` : undefined}>
-      {src ? (
-        <SvgImage href={{ uri: src }} x={it.x} y={it.y} width={it.w} height={it.h} preserveAspectRatio="xMidYMid meet" />
-      ) : (
-        <SvgText x={cx} y={cy + Math.min(it.w, it.h) * 0.3} fontSize={Math.min(it.w, it.h) * 0.85} textAnchor="middle">
-          {it.emoji || '❔'}
         </SvgText>
       )}
     </G>

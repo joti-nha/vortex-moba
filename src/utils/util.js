@@ -18,6 +18,7 @@ export const encaixar = (v, celula, tam = 1) =>
 
 // Caixa delimitadora de qualquer item (para seleção e outliner)
 export function caixa(it) {
+  if (it.type === 'luz') return { x: it.x - 20, y: it.y - 20, w: 40, h: 40 }; // só o centro da luz é "pegável"
   if (it.type === 'token' || it.type === 'circle') {
     return { x: it.x - it.r, y: it.y - it.r, w: it.r * 2, h: it.r * 2 };
   }
@@ -25,6 +26,7 @@ export function caixa(it) {
 }
 
 export function contemPonto(it, wx, wy, margem = 6) {
+  if (it.type === 'luz') return Math.hypot(wx - it.x, wy - it.y) <= 20 + margem;
   if (it.type === 'token' || it.type === 'circle') {
     return Math.hypot(wx - it.x, wy - it.y) <= it.r + margem;
   }
@@ -50,6 +52,8 @@ export const NOME_TIPO = {
   rect: 'Retângulo',
   circle: 'Círculo',
   prop: 'Objeto',
+  luz: 'Luz',
+  tiles: 'Mapa',
 };
 
 export const ICONE_TIPO = {
@@ -58,6 +62,8 @@ export const ICONE_TIPO = {
   rect: 'square-outline',
   circle: 'circle-outline',
   prop: 'cube-outline',
+  luz: 'lightbulb-on-outline',
+  tiles: 'map-outline',
 };
 
 // ---------- pastas ----------

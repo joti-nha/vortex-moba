@@ -4,6 +4,8 @@
 import { useEffect, useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { Platform } from 'react-native';
+import { File, Paths } from 'expo-file-system';
 import { lerDoc, salvar } from './firestore';
 import { gerarId } from '../utils/util';
 
@@ -88,11 +90,38 @@ export async function escolherImagem(origem, { largura = 512, autor = '' } = {})
   if (!res || res.canceled || !res.assets || !res.assets.length) return null;
 
   const original = res.assets[0];
-  const larguraFinal = Math.min(largura, original.width || largura);
-  const r = await comprimir(original.uri, larguraFinal);
+  return salvarImagemDeUri(original.uri, { largura: Math.min(largura, original.width || largura), autor });
+}
+
+// Comprime uma imagem (uri local, blob ou data URI) e guarda no Firestore. Retorna { ref, w, h }
+export async function salvarImagemDeUri(uri, { largura = 1024, autor = '' } = {}) {
+  const r = await comprimir(uri, largura);
   const id = gerarId();
   const dados = `data:image/jpeg;base64,${r.base64}`;
   await salvar(`${COL_IMAGENS}/${id}`, { dados, largura: r.width, altura: r.height, autor, criadoEm: Date.now() });
   cacheImg[id] = dados;
   return { ref: `fs:${id}`, w: r.width, h: r.height };
+}
+
+// Tipo da imagem pelo início do base64
+export function mimeDoBase64(b64) {
+  if (b64.startsWith('/9j/')) return 'image/jpeg';
+  if (b64.startsWith('UklGR')) return 'image/webp';
+  return 'image/png';
+}
+
+// Imagem que chega em base64 (ex.: mapa do Dungeondraft). No celular vira arquivo temporário antes de comprimir.
+export async function salvarImagemBase64(b64, opcoes = {}) {
+  const mime = mimeDoBase64(b64);
+  if (Platform.OS === 'web') return salvarImagemDeUri(`data:${mime};base64,${b64}`, opcoes);
+  const arq = new File(Paths.cache, `import_${Date.now()}.${mime.split('/')[1]}`);
+  arq.create({ overwrite: true });
+  await arq.write(b64, { encoding: 'base64' });
+  try {
+    return await salvarImagemDeUri(arq.uri, opcoes);
+  } finally {
+    try {
+      arq.delete();
+    } catch (e) {}
+  }
 }

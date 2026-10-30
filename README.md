@@ -19,7 +19,9 @@ Tabletop virtual (releitura do Owlbear Rodeo) para o sistema de RPG **Vortex**, 
   - Oficiais (postados pelos admins) e packs próprios dos jogadores.
   - Cada usuário escolhe quais packs usar na mesa.
   - **Oficialização**: o jogador envia o pack; os admins recebem uma notificação e podem **aprovar**, **devolver com ressalvas** (comentário + cada asset marcado como aceito/não aceito) ou **recusar**.
-- **Criador de mapas** (estilo dungeon maker): geradores com semente (masmorra com salas e corredores, caverna, labirinto), pincel de terreno (chão, terra, água, lava), salas por retângulo, borracha, portas e escadas, paredes automáticas, 5 temas (pedra, pergaminho, caverna, floresta, sci-fi) e desfazer. O mapa vai para Meus assets › Mapas e é aplicado na mesa pela aba Assets.
+- **Criador de mapas** (estilo Dungeondraft): geradores com semente (masmorra, caverna, labirinto); pintura de salas e terrenos com **texturas** (lajotas, pedregulhos, grama, água, lava) e **hachura** fora das paredes; portas e escadas; **objetos de cenário** dos seus packs e de Meus assets (girar, escalar, encaixar); **caminhos** (estrada, trilha, rio, lava, muro); **luzes** com cor e raio + **escuridão**; **vários andares** (cada andar vira um par de camadas na mesa); 5 temas; desfazer.
+- **Importar do Dungeondraft**: arquivos Universal VTT (`.dd2vtt`) — imagem do mapa (comprimida), grade alinhada e luzes; paredes e portas ficam guardadas no asset. Disponível em Meus assets › Mapas, no criador de mapas e na aba Construir da mesa.
+- **Luzes e escuridão na mesa**: ferramenta Luz (aba Desenho) e controle de Escuridão (aba Grade).
 - **Imagens**: galeria, câmera ou URL. As imagens enviadas são comprimidas e guardadas na coleção `imagens` (sem precisar do Firebase Storage).
 
 ## Estrutura
@@ -37,12 +39,13 @@ src/
     auth.js            contas, sessão, visitante, admins, packs ativos
     assets.js          packs, oficialização, notificações, estruturas e mapas
     imagens.js         escolher, comprimir, salvar e exibir imagens
+    dungeondraft.js    importação de mapas .dd2vtt (Universal VTT)
   utils/
     util.js            ids, caixas, colisão
     grade.js           grade quadrada/hexagonal e encaixe
     link.js            links de convite
     masmorra.js        geradores de mapa (masmorra, caverna, labirinto) e pintura de células
-  components/          Logo, Ficha (FichaVortex), CampoImagem, CampoPasta, AssetMini, EditorObjeto, ModalNome, MapaTiles
+  components/          Logo, Ficha (FichaVortex), CampoImagem, CampoPasta, AssetMini, EditorObjeto, ModalNome, MapaTiles, ItensSvg (objeto, luz, escuridão)
   screens/             Acesso, Inicio, Perfil, Packs (Packs + Postagens), MeusAssets, CriadorMapas
   mesa/                Mesa, Palco (SVG + gestos), PainelCamadas, ConfigMesa
 scripts/arquivo-unico.js   gera snack/App.js (tudo em um arquivo)
@@ -64,7 +67,7 @@ snack/App.js               versão de arquivo único, pronta para colar no Snack
 - Opção 1: importe este repositório no Snack (Import git repository).
 - Opção 2: cole o conteúdo de `snack/App.js` no `App.js` de um Snack novo.
 
-Dependências: `react-native-svg`, `@react-native-async-storage/async-storage`, `expo-linking`, `expo-image-picker`, `expo-image-manipulator`.
+Dependências: `react-native-svg`, `@react-native-async-storage/async-storage`, `expo-linking`, `expo-image-picker`, `expo-image-manipulator`, `expo-document-picker`, `expo-file-system`.
 
 **Local**
 ```
