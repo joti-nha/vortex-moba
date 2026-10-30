@@ -7158,7 +7158,8 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
 
   // assets de cenário (Meus assets + packs em uso)
   const [fontes, setFontes] = useState([]);
-  const [fonte, setFonte] = useState('meus');
+  const [fonte, setFonte] = useState('todos');
+  const [estadoFontes, setEstadoFontes] = useState('carregando'); // carregando | ok | erro
   const [pastaObj, setPastaObj] = useState(null);
   const [modelo, setModelo] = useState(null);
   const [tipoUso, setTipoUso] = useState('objeto');
@@ -7175,14 +7176,19 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
       try {
         const [meus, packs, ativos] = await Promise.all([carregarMeusAssets(usuario.usuario), carregarTodosPacks(), lerPacksAtivos(usuario.usuario)]);
         const objetos = (l) => l.filter((a) => a.tipo === 'objeto' || a.tipo === 'personagem' || a.tipo === 'estrutura');
-        setFontes([
-          { id: 'meus', nome: 'Meus assets', assets: objetos(meus) },
-          ...packs
-            .filter((p) => packVisivelPara(p, usuario.usuario) && packEstaAtivo(ativos, p.id))
-            .map((p) => ({ id: p.id, nome: p.nome, assets: objetos(p.assets) }))
-            .filter((f) => f.assets.length),
-        ]);
-      } catch (e) {}
+        const dosPacks = packs
+          .filter((p) => packVisivelPara(p, usuario.usuario) && packEstaAtivo(ativos, p.id))
+          .map((p) => ({ id: p.id, nome: p.nome, assets: objetos(p.assets) }))
+          .filter((f) => f.assets.length);
+        const meusObj = objetos(meus);
+        // "Todos" junta Meus assets + packs em uso (sem repetir as cópias de pack)
+        const copias = new Set(meusObj.map((a) => a.origem).filter(Boolean));
+        const todos = [...meusObj, ...dosPacks.flatMap((f) => f.assets.filter((a) => !copias.has(a.id)))];
+        setFontes([{ id: 'todos', nome: 'Todos', assets: todos }, { id: 'meus', nome: 'Meus assets', assets: meusObj }, ...dosPacks]);
+        setEstadoFontes('ok');
+      } catch (e) {
+        setEstadoFontes('erro');
+      }
     })();
   }, []);
 
@@ -7968,7 +7974,9 @@ function CriadorMapas({ usuario, asset, onVoltar }) {
               </ScrollView>
             )}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[estCriadorMapas.faixa, { paddingTop: 0 }]}>
-              {objsVisiveis.length === 0 && (
+              {estadoFontes === 'carregando' && <ActivityIndicator color={C.destaque} />}
+              {estadoFontes === 'erro' && <Text style={[estCriadorMapas.dica, { color: C.perigo }]}>Não foi possível carregar os assets. Verifique a conexão.</Text>}
+              {estadoFontes === 'ok' && objsVisiveis.length === 0 && (
                 <Text style={estCriadorMapas.dica}>
                   Nada em {TIPOS_USO.find((x) => x.id === tipoUso).nome.toLowerCase()} nesta fonte. Crie em Meus assets, monte estruturas na mesa (aba Construir) ou ative packs.
                 </Text>
