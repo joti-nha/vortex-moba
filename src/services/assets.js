@@ -3,7 +3,7 @@
 import { porNome } from '../components/Ficha';
 import { C } from '../config/theme';
 import { ASSETS_SEMENTE, PACKS_SEMENTE } from '../data/sementes';
-import { COL, atualizar, consultar, listar, salvar } from './firestore';
+import { COL, atualizar, consultar, lerDoc, listar, salvar } from './firestore';
 import { caixa, gerarId } from '../utils/util';
 
 export const assetsDe = (usuario) => `${COL.usuarios}/${usuario}/assets`;
@@ -12,15 +12,40 @@ export const assetsDe = (usuario) => `${COL.usuarios}/${usuario}/assets`;
 // ---------- carregamento ----------
 // Packs com seus assets agrupados. incluirRascunhos: só para o admin.
 // Todos os packs (oficiais e de jogadores) com seus assets agrupados
+// Versão dos dados iniciais. Ao aumentar, os packs e assets básicos que faltarem são gravados de novo.
+const SEMENTES_VERSAO = 2;
+let sementesConferidas = false;
+
+// Garante que os packs e assets básicos existam no banco (completa o que faltar, sem apagar nada)
+async function garantirSementes(packs, assets) {
+  if (sementesConferidas) return false;
+  sementesConferidas = true;
+  try {
+    const marca = await lerDoc('config/sementes');
+    const temPacks = new Set(packs.map((p) => p.id));
+    const temAssets = {};
+    assets.forEach((a) => (temAssets[a.id] = a));
+    const faltando = PACKS_SEMENTE.some((p) => !temPacks.has(p.id)) || ASSETS_SEMENTE.some((a) => !temAssets[a.id]);
+    if (marca && marca.versao >= SEMENTES_VERSAO && !faltando) return false;
+    const tarefas = [];
+    PACKS_SEMENTE.forEach((p) => !temPacks.has(p.id) && tarefas.push(salvar(`${COL.packs}/${p.id}`, p)));
+    ASSETS_SEMENTE.forEach((a) => {
+      const atual = temAssets[a.id];
+      if (!atual) tarefas.push(salvar(`${COL.assets}/${a.id}`, a));
+      else if (!atual.pasta && a.pasta) tarefas.push(atualizar(`${COL.assets}/${a.id}`, { pasta: a.pasta }));
+    });
+    await Promise.all(tarefas);
+    await salvar('config/sementes', { versao: SEMENTES_VERSAO, em: Date.now() });
+    return tarefas.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
 export async function carregarTodosPacks() {
   let [packs, assets] = await Promise.all([listar(COL.packs), listar(COL.assets)]);
-  if (packs.length === 0) {
-    await Promise.all([
-      ...PACKS_SEMENTE.map((p) => salvar(`${COL.packs}/${p.id}`, p)),
-      ...ASSETS_SEMENTE.map((a) => salvar(`${COL.assets}/${a.id}`, a)),
-    ]);
-    packs = PACKS_SEMENTE.slice();
-    assets = ASSETS_SEMENTE.slice();
+  if (await garantirSementes(packs, assets)) {
+    [packs, assets] = await Promise.all([listar(COL.packs), listar(COL.assets)]);
   }
   const porPack = {};
   assets.forEach((a) => (porPack[a.pack] = porPack[a.pack] || []).push(a));

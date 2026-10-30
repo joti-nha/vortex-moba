@@ -8,7 +8,8 @@ import { ModalNome } from '../components/ModalNome';
 import { C } from '../config/theme';
 import { TIPOS_ASSET } from '../data/constantes';
 import { Topo } from './Packs';
-import { assetDaFicha, assetsDe, carregarMeusAssets, fichaDoAsset, resumoAsset } from '../services/assets';
+import { assetDaFicha, assetsDe, carregarMeusAssets, carregarTodosPacks, fichaDoAsset, packEstaAtivo, packVisivelPara, resumoAsset } from '../services/assets';
+import { lerPacksAtivos } from '../services/auth';
 import { apagar, salvar } from '../services/firestore';
 import { escolherArquivoVtt, importarVtt } from '../services/dungeondraft';
 import { SEM_PASTA, agruparPorPasta, gerarId, pastasDe } from '../utils/util';
@@ -25,16 +26,44 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks, onCriarMap
   const [editFicha, setEditFicha] = useState(null);
   const [editObjeto, setEditObjeto] = useState(null);
   const [renomear, setRenomear] = useState(null);
+  const [origem, setOrigem] = useState('meus'); // 'meus' | 'basicos' (assets dos packs em uso)
+  const [basicos, setBasicos] = useState([]);
+  const [vendoBasico, setVendoBasico] = useState(null);
+  const [aviso, setAviso] = useState('');
 
   async function recarregar() {
     setCarregando(true);
     setErro('');
     try {
-      setLista(await carregarMeusAssets(usuario.usuario));
+      const [meus, packs, ativos] = await Promise.all([carregarMeusAssets(usuario.usuario), carregarTodosPacks(), lerPacksAtivos(usuario.usuario)]);
+      setLista(meus);
+      setBasicos(
+        packs
+          .filter((p) => packVisivelPara(p, usuario.usuario) && packEstaAtivo(ativos, p.id))
+          .flatMap((p) => p.assets.map((a) => ({ ...a, nomePack: p.nome })))
+      );
+      if (!meus.length) setOrigem('basicos');
     } catch (e) {
       setErro('Não foi possível carregar seus assets.');
     }
     setCarregando(false);
+  }
+
+  const copiados = useMemo(() => {
+    const m = {};
+    lista.forEach((a) => a.origem && (m[a.origem] = true));
+    return m;
+  }, [lista]);
+
+  async function copiarBasico(a) {
+    if (copiados[a.id]) return;
+    const { pack, nomePack, ...resto } = a;
+    const id = `pk_${a.id}`;
+    const novo = { ...resto, id, origem: a.id, adicionadoEm: Date.now() };
+    await salvar(`${caminho}/${id}`, novo);
+    setLista((l) => porNome([...l, novo]));
+    setAviso(`"${a.nome}" copiado para Meus assets`);
+    setTimeout(() => setAviso(''), 2500);
   }
   useEffect(() => {
     recarregar();
@@ -42,8 +71,9 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks, onCriarMap
 
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    return lista.filter((a) => a.tipo === aba && (!q || (a.nome || '').toLowerCase().includes(q)));
-  }, [lista, busca, aba]);
+    const fonte = origem === 'meus' ? lista : basicos;
+    return fonte.filter((a) => a.tipo === aba && (!q || (a.nome || '').toLowerCase().includes(q)));
+  }, [lista, basicos, origem, busca, aba]);
 
   async function gravar(asset) {
     const final = { ...asset, id: asset.id || gerarId(), autor: asset.autor || usuario.nome, criadoEm: asset.criadoEm || Date.now(), atualizadoEm: Date.now() };
@@ -72,13 +102,18 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks, onCriarMap
   }
 
   function abrir(a) {
+    if (origem === 'basicos') {
+      if (a.tipo === 'personagem') setVendoBasico(a);
+      else copiarBasico(a);
+      return;
+    }
     if (a.tipo === 'personagem') setEditFicha(fichaDoAsset(a));
     else if (a.tipo === 'objeto') setEditObjeto(a);
     else if (a.tipo === 'mapa' && (a.itens || []).some((i) => i.type === 'tiles') && onCriarMapa) onCriarMapa(a);
     else setRenomear(a);
   }
 
-  const contar = (t) => lista.filter((a) => a.tipo === t).length;
+  const contar = (t) => (origem === 'meus' ? lista : basicos).filter((a) => a.tipo === t).length;
   const tipoAtual = TIPOS_ASSET.find((t) => t.id === aba);
 
   return (
@@ -106,6 +141,23 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks, onCriarMap
         ))}
       </View>
 
+      <View style={s.origens}>
+        {[
+          ['meus', 'account-box-outline', `Meus (${lista.length})`],
+          ['basicos', 'package-variant', `Básicos e packs (${basicos.length})`],
+        ].map(([id, ic, rot]) => (
+          <TouchableOpacity key={id} onPress={() => setOrigem(id)} style={[s.origem, origem === id && s.origemAtiva]}>
+            <Icone name={ic} size={15} color={origem === id ? '#fff' : C.suave} />
+            <Text style={[s.origemTxt, origem === id && { color: '#fff' }]}>{rot}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {origem === 'basicos' && (
+        <Text style={s.explicaBasicos}>
+          Assets dos packs que você está usando. Toque para copiar para Meus assets (personagens abrem a ficha). Na mesa e no criador de mapas eles já aparecem direto.
+        </Text>
+      )}
+      {!!aviso && <Text style={[s.explicaBasicos, { color: C.ok }]}>{aviso}</Text>}
       <View style={s.busca}>
         <Icone name="magnify" size={18} color={C.suave} />
         <TextInput style={s.buscaInput} value={busca} onChangeText={setBusca} placeholder={`Buscar em ${tipoAtual.nome.toLowerCase()}`} placeholderTextColor={C.suave} />
@@ -147,7 +199,14 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks, onCriarMap
                   </Text>
                 )}
               </View>
-              <Text style={[s.selo, a.origem ? s.seloPack : s.seloMeu]}>{a.origem ? 'de pack' : 'seu'}</Text>
+              {origem === 'basicos' ? (
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                  <Text style={[s.selo, s.seloPack]} numberOfLines={1}>{a.nomePack}</Text>
+                  <Icone name={copiados[a.id] ? 'check' : 'content-copy'} size={18} color={copiados[a.id] ? C.ok : C.suave} />
+                </View>
+              ) : (
+                <Text style={[s.selo, a.origem ? s.seloPack : s.seloMeu]}>{a.origem ? 'de pack' : 'seu'}</Text>
+              )}
             </TouchableOpacity>
           ))}
             </View>
@@ -155,17 +214,17 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks, onCriarMap
         </ScrollView>
       )}
 
-      {aba === 'mapa' && !!onCriarMapa && (
+      {origem === 'meus' && aba === 'mapa' && !!onCriarMapa && (
         <TouchableOpacity style={s.fab} onPress={() => onCriarMapa(null)}>
           <Icone name="map-plus" size={26} color="#fff" />
         </TouchableOpacity>
       )}
-      {aba === 'mapa' && (
+      {origem === 'meus' && aba === 'mapa' && (
         <TouchableOpacity style={[s.fab, { bottom: 92, backgroundColor: C.painel2, borderWidth: 1, borderColor: C.destaque2 }]} onPress={importarDD}>
           {importando ? <ActivityIndicator color={C.destaque2} /> : <Icone name="file-import-outline" size={24} color={C.destaque2} />}
         </TouchableOpacity>
       )}
-      {(aba === 'personagem' || aba === 'objeto') && (
+      {origem === 'meus' && (aba === 'personagem' || aba === 'objeto') && (
         <TouchableOpacity
           style={s.fab}
           onPress={() => (aba === 'personagem' ? setEditFicha({ ...FICHA_VAZIA }) : setEditObjeto({}))}
@@ -174,6 +233,20 @@ export default function MeusAssets({ usuario, onVoltar, onAbrirPacks, onCriarMap
         </TouchableOpacity>
       )}
 
+      {vendoBasico && (
+        <FichaVortex
+          ficha={fichaDoAsset(vendoBasico)}
+          titulo={`Ficha · ${vendoBasico.nomePack}`}
+          somenteLeitura
+          acaoExtra={{
+            rotulo: copiados[vendoBasico.id] ? 'Já está em Meus assets' : 'Copiar para Meus assets',
+            icone: copiados[vendoBasico.id] ? 'check' : 'content-copy',
+            desativado: copiados[vendoBasico.id],
+            onPress: () => copiarBasico(vendoBasico).then(() => setVendoBasico(null)),
+          }}
+          onFechar={() => setVendoBasico(null)}
+        />
+      )}
       {editFicha && (
         <FichaVortex
           pastas={pastasDe(lista.filter((x) => x.tipo === 'personagem'))}
@@ -261,5 +334,10 @@ const s = StyleSheet.create({
   vazio: { color: C.suave, textAlign: 'center' },
   vazioSub: { color: C.suave, fontSize: 12, textAlign: 'center' },
   btnVazio: { backgroundColor: C.destaque, borderRadius: 10, paddingHorizontal: 18, paddingVertical: 10, marginTop: 8 },
+  origens: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingTop: 10 },
+  origem: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: C.borda },
+  origemAtiva: { backgroundColor: C.destaque, borderColor: C.destaque },
+  origemTxt: { color: C.suave, fontWeight: '700', fontSize: 12 },
+  explicaBasicos: { color: C.suave, fontSize: 11, paddingHorizontal: 14, paddingTop: 6 },
   fab: { position: 'absolute', right: 20, bottom: 24, width: 58, height: 58, borderRadius: 29, backgroundColor: C.destaque, alignItems: 'center', justifyContent: 'center', elevation: 6 },
 });
