@@ -28,7 +28,6 @@ Tabletop virtual (releitura do Owlbear Rodeo) para o sistema de RPG **Vortex**, 
 
 ```
 App.js                 navegação entre telas
-index.js               entrada do Expo
 src/
   config/theme.js      cores e paleta
   data/
