@@ -67,7 +67,7 @@ snack/App.js               versão de arquivo único, pronta para colar no Snack
 - Opção 1: importe este repositório no Snack (Import git repository).
 - Opção 2: cole o conteúdo de `snack/App.js` no `App.js` de um Snack novo.
 
-Dependências: `react-native-svg`, `@react-native-async-storage/async-storage`, `expo-linking`, `expo-image-picker`, `expo-image-manipulator`, `expo-document-picker`, `expo-file-system`.
+Dependências: `react-native-svg`, `@react-native-async-storage/async-storage`, `expo-linking`, `expo-image-picker`, `expo-image-manipulator`, `expo-document-picker`.
 
 **Local**
 ```

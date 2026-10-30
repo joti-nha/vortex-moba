@@ -18,7 +18,6 @@
     "expo-image-picker": "*",
     "expo-linking": "*",
     "react-native-svg": "*",
-    "expo-document-picker": "*",
-    "expo-file-system": "*"
+    "expo-document-picker": "*"
   }
 }

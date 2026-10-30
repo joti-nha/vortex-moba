@@ -4,8 +4,6 @@
 import { useEffect, useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Platform } from 'react-native';
-import { File, Paths } from 'expo-file-system';
 import { lerDoc, salvar } from './firestore';
 import { gerarId } from '../utils/util';
 
@@ -110,18 +108,12 @@ export function mimeDoBase64(b64) {
   return 'image/png';
 }
 
-// Imagem que chega em base64 (ex.: mapa do Dungeondraft). No celular vira arquivo temporário antes de comprimir.
+// Imagem que chega em base64 (ex.: mapa do Dungeondraft): comprime direto do data URI
 export async function salvarImagemBase64(b64, opcoes = {}) {
   const mime = mimeDoBase64(b64);
-  if (Platform.OS === 'web') return salvarImagemDeUri(`data:${mime};base64,${b64}`, opcoes);
-  const arq = new File(Paths.cache, `import_${Date.now()}.${mime.split('/')[1]}`);
-  arq.create({ overwrite: true });
-  await arq.write(b64, { encoding: 'base64' });
   try {
-    return await salvarImagemDeUri(arq.uri, opcoes);
-  } finally {
-    try {
-      arq.delete();
-    } catch (e) {}
+    return await salvarImagemDeUri(`data:${mime};base64,${b64}`, opcoes);
+  } catch (e) {
+    throw new Error('Não consegui processar a imagem do mapa neste aparelho. Tente importar pela versão web do Snack.');
   }
 }

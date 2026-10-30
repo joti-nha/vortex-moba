@@ -3,7 +3,6 @@
 // pixels por célula, paredes (line_of_sight), portas (portals) e luzes (lights), tudo em unidades de grade.
 import { Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
 import { salvar } from './firestore';
 import { assetsDe } from './assets';
 import { salvarImagemBase64 } from './imagens';
@@ -11,17 +10,23 @@ import { gerarId } from '../utils/util';
 
 const CEL = 70; // tamanho da célula na mesa
 
+// Lê um arquivo local como texto sem depender do expo-file-system (XMLHttpRequest aceita file:// e blob:)
+function lerTextoDeUri(uri) {
+  return new Promise((ok, falha) => {
+    const xhr = new XMLHttpRequest();
+    xhr.onload = () => ok(xhr.responseText);
+    xhr.onerror = () => falha(new Error('Não foi possível ler o arquivo.'));
+    xhr.open('GET', uri);
+    xhr.send();
+  });
+}
+
 // Abre o seletor de arquivos e devolve { nome, dados } ou null se cancelado
 export async function escolherArquivoVtt() {
   const r = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true, multiple: false });
   if (!r || r.canceled || !r.assets || !r.assets.length) return null;
   const a = r.assets[0];
-  let texto;
-  if (Platform.OS === 'web') {
-    texto = a.file ? await a.file.text() : await (await fetch(a.uri)).text();
-  } else {
-    texto = await new File(a.uri).text();
-  }
+  const texto = Platform.OS === 'web' && a.file ? await a.file.text() : await lerTextoDeUri(a.uri);
   let dados;
   try {
     dados = JSON.parse(texto);

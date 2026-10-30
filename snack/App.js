@@ -3,8 +3,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, G, Rect, Pattern, Image as SvgImage, Text as SvgText, RadialGradient, Mask, Line, ClipPath } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Platform, View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator, ScrollView, Modal, PanResponder, Linking, Share, KeyboardAvoidingView, SafeAreaView, StatusBar } from 'react-native';
-import { File, Paths } from 'expo-file-system';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator, ScrollView, Modal, PanResponder, Platform, Linking, Share, KeyboardAvoidingView, SafeAreaView, StatusBar } from 'react-native';
 import { MaterialCommunityIcons as Icone } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -407,19 +406,13 @@ function mimeDoBase64(b64) {
   return 'image/png';
 }
 
-// Imagem que chega em base64 (ex.: mapa do Dungeondraft). No celular vira arquivo temporário antes de comprimir.
+// Imagem que chega em base64 (ex.: mapa do Dungeondraft): comprime direto do data URI
 async function salvarImagemBase64(b64, opcoes = {}) {
   const mime = mimeDoBase64(b64);
-  if (Platform.OS === 'web') return salvarImagemDeUri(`data:${mime};base64,${b64}`, opcoes);
-  const arq = new File(Paths.cache, `import_${Date.now()}.${mime.split('/')[1]}`);
-  arq.create({ overwrite: true });
-  await arq.write(b64, { encoding: 'base64' });
   try {
-    return await salvarImagemDeUri(arq.uri, opcoes);
-  } finally {
-    try {
-      arq.delete();
-    } catch (e) {}
+    return await salvarImagemDeUri(`data:${mime};base64,${b64}`, opcoes);
+  } catch (e) {
+    throw new Error('Não consegui processar a imagem do mapa neste aparelho. Tente importar pela versão web do Snack.');
   }
 }
 
@@ -2872,17 +2865,23 @@ const assetDaFicha = (f, extra = {}) => {
 
 const CEL = 70; // tamanho da célula na mesa
 
+// Lê um arquivo local como texto sem depender do expo-file-system (XMLHttpRequest aceita file:// e blob:)
+function lerTextoDeUri(uri) {
+  return new Promise((ok, falha) => {
+    const xhr = new XMLHttpRequest();
+    xhr.onload = () => ok(xhr.responseText);
+    xhr.onerror = () => falha(new Error('Não foi possível ler o arquivo.'));
+    xhr.open('GET', uri);
+    xhr.send();
+  });
+}
+
 // Abre o seletor de arquivos e devolve { nome, dados } ou null se cancelado
 async function escolherArquivoVtt() {
   const r = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true, multiple: false });
   if (!r || r.canceled || !r.assets || !r.assets.length) return null;
   const a = r.assets[0];
-  let texto;
-  if (Platform.OS === 'web') {
-    texto = a.file ? await a.file.text() : await (await fetch(a.uri)).text();
-  } else {
-    texto = await new File(a.uri).text();
-  }
+  const texto = Platform.OS === 'web' && a.file ? await a.file.text() : await lerTextoDeUri(a.uri);
   let dados;
   try {
     dados = JSON.parse(texto);
