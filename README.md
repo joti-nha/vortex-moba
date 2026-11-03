@@ -1,4 +1,4 @@
-# Mesa Vortex
+# Fluxo
 
 Tabletop virtual (releitura do Owlbear Rodeo) para o sistema de RPG **Vortex**, feito em **React Native / Expo** com **Firestore via REST** (sem SDK do Firebase, compatível com o Expo Snack).
 

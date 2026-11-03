@@ -150,7 +150,7 @@ export default function Inicio({ usuario, onAbrirMesa, onMeusAssets, onPacks, on
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View style={s.topo}>
         <Logo tamanho={34} id="logoTopo" />
-        <Text style={s.marca}>Mesa Vortex</Text>
+        <Text style={s.marca}>Fluxo</Text>
         <TouchableOpacity style={s.sino} onPress={() => setVerNotif(true)}>
           <Icone name={naoLidas.length ? 'bell-ring-outline' : 'bell-outline'} size={22} color={naoLidas.length ? '#eab308' : C.suave} />
           {naoLidas.length > 0 && (

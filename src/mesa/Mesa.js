@@ -525,7 +525,7 @@ export default function Mesa({ codigo, usuario, onSair, onEntrarConta, onCriarMa
         await navigator.clipboard.writeText(link);
         avisar('Link da mesa copiado!');
       } else {
-        await Share.share({ message: `Entre na minha mesa "${sala.nome}" no Mesa Vortex: ${link} (código ${codigo})` });
+        await Share.share({ message: `Entre na minha mesa "${sala.nome}" no Fluxo: ${link} (código ${codigo})` });
       }
     } catch (e) {
       avisar(`Código da mesa: ${codigo}`);

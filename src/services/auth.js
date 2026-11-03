@@ -1,4 +1,4 @@
-// Sistema de contas da Mesa Vortex (coleção usuarios).
+// Sistema de contas da Fluxo (coleção usuarios).
 // Métodos de entrada:
 //  - e-mail/usuário + senha: conta própria (salt + hash SHA-256 iterado, a senha nunca é salva)
 //  - anônimo (visitante): Firebase Authentication via REST (Identity Toolkit), sem SDK

@@ -1,4 +1,4 @@
-// MESA VORTEX — arquivo único gerado por scripts/arquivo-unico.js (não edite aqui; edite em src/)
+// FLUXO — arquivo único gerado por scripts/arquivo-unico.js (não edite aqui; edite em src/)
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, G, Rect, Pattern, Image as SvgImage, Text as SvgText, RadialGradient, Mask, ClipPath, Line } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
@@ -12,7 +12,7 @@ import * as ExpoLinking from 'expo-linking';
 // ================================================================
 // src/config/theme.js
 // ================================================================
-// Paleta da Mesa Vortex
+// Paleta da Fluxo
 const C = {
   bg: '#0b0912',
   palco: '#07060c',
@@ -2687,7 +2687,7 @@ const PACKS_SEMENTE = [
   { id: 'pack_vila', nome: 'Taverna da Vila', nicho: 'Cidade', cor: '#f97316', icone: 'glass-mug-variant', descricao: 'NPCs e mobília para cenas na cidade.', ordem: 3 },
   { id: 'pack_floresta', nome: 'Floresta Antiga', nicho: 'Natureza', cor: '#22c55e', icone: 'pine-tree', descricao: 'Árvores, rochas e um acampamento pronto.', ordem: 4 },
   { id: 'pack_masmorra', nome: 'Masmorra Básica', nicho: 'Masmorra', cor: '#78716c', icone: 'castle', descricao: 'Portas, baús, armadilhas e uma sala do tesouro.', ordem: 5 },
-].map((p) => ({ publicado: true, capa: '', autor: 'Mesa Vortex', criadoEm: 0, ...p }));
+].map((p) => ({ publicado: true, capa: '', autor: 'Fluxo', criadoEm: 0, ...p }));
 
 const fichaSemente = (id, pack, nome, tipo, tamanho, cor, corpo, precisao, essencia, pericias, vida, descricao) => ({
   id, pack, tipo: 'personagem', nome, categoria: tipo, tamanho, cor, corpo, precisao, essencia, pericias, recursos: recVida('Vida', vida), descricao,
@@ -2758,7 +2758,7 @@ const ASSETS_SEMENTE = [
       { type: 'prop', x: 105, y: 175, w: 70, h: 35, emoji: '🚪', cor: '#a16207' },
     ],
   },
-].map((a) => ({ autor: 'Mesa Vortex', criadoEm: 0, pasta: PASTA_INICIAL[a.id] || '', ...a }));
+].map((a) => ({ autor: 'Fluxo', criadoEm: 0, pasta: PASTA_INICIAL[a.id] || '', ...a }));
 
 // ================================================================
 // src/services/assets.js
@@ -3040,7 +3040,7 @@ async function importarVtt(arquivo, { usuario, aoProgresso } = {}) {
 // ================================================================
 // src/services/auth.js
 // ================================================================
-// Sistema de contas da Mesa Vortex (coleção usuarios).
+// Sistema de contas da Fluxo (coleção usuarios).
 // Métodos de entrada:
 //  - e-mail/usuário + senha: conta própria (salt + hash SHA-256 iterado, a senha nunca é salva)
 //  - anônimo (visitante): Firebase Authentication via REST (Identity Toolkit), sem SDK
@@ -3919,7 +3919,7 @@ function Mesa({ codigo, usuario, onSair, onEntrarConta, onCriarMapa }) {
         await navigator.clipboard.writeText(link);
         avisar('Link da mesa copiado!');
       } else {
-        await Share.share({ message: `Entre na minha mesa "${sala.nome}" no Mesa Vortex: ${link} (código ${codigo})` });
+        await Share.share({ message: `Entre na minha mesa "${sala.nome}" no Fluxo: ${link} (código ${codigo})` });
       }
     } catch (e) {
       avisar(`Código da mesa: ${codigo}`);
@@ -4676,7 +4676,7 @@ function Acesso({ onLogado, mesaPendente, onContinuarVisitante }) {
           <View style={{ alignItems: 'center' }}>
             <Logo tamanho={72} id="logoAcesso" />
           </View>
-          <Text style={estAcesso.titulo}>Mesa Vortex</Text>
+          <Text style={estAcesso.titulo}>Fluxo</Text>
           <Text style={estAcesso.sub}>sua mesa de RPG virtual, no bolso</Text>
 
           {!!mesaPendente && (
@@ -4994,7 +4994,7 @@ function Inicio({ usuario, onAbrirMesa, onMeusAssets, onPacks, onPostagens, onPe
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View style={estInicio.topo}>
         <Logo tamanho={34} id="logoTopo" />
-        <Text style={estInicio.marca}>Mesa Vortex</Text>
+        <Text style={estInicio.marca}>Fluxo</Text>
         <TouchableOpacity style={estInicio.sino} onPress={() => setVerNotif(true)}>
           <Icone name={naoLidas.length ? 'bell-ring-outline' : 'bell-outline'} size={22} color={naoLidas.length ? '#eab308' : C.suave} />
           {naoLidas.length > 0 && (

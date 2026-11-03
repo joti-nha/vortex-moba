@@ -77,7 +77,7 @@ export default function Acesso({ onLogado, mesaPendente, onContinuarVisitante })
           <View style={{ alignItems: 'center' }}>
             <Logo tamanho={72} id="logoAcesso" />
           </View>
-          <Text style={s.titulo}>Mesa Vortex</Text>
+          <Text style={s.titulo}>Fluxo</Text>
           <Text style={s.sub}>sua mesa de RPG virtual, no bolso</Text>
 
           {!!mesaPendente && (

@@ -82,6 +82,6 @@ const cab = Object.entries(externos)
 fs.mkdirSync(path.dirname(SAIDA), { recursive: true });
 fs.writeFileSync(
   SAIDA,
-  `// MESA VORTEX — arquivo único gerado por scripts/arquivo-unico.js (não edite aqui; edite em src/)\n${cab}\n${corpo}`
+  `// FLUXO — arquivo único gerado por scripts/arquivo-unico.js (não edite aqui; edite em src/)\n${cab}\n${corpo}`
 );
 console.log(`Gerado ${path.relative(RAIZ, SAIDA)} com ${ordem.length} arquivos.`);

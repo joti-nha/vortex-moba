@@ -6,7 +6,7 @@ export const PACKS_SEMENTE = [
   { id: 'pack_vila', nome: 'Taverna da Vila', nicho: 'Cidade', cor: '#f97316', icone: 'glass-mug-variant', descricao: 'NPCs e mobília para cenas na cidade.', ordem: 3 },
   { id: 'pack_floresta', nome: 'Floresta Antiga', nicho: 'Natureza', cor: '#22c55e', icone: 'pine-tree', descricao: 'Árvores, rochas e um acampamento pronto.', ordem: 4 },
   { id: 'pack_masmorra', nome: 'Masmorra Básica', nicho: 'Masmorra', cor: '#78716c', icone: 'castle', descricao: 'Portas, baús, armadilhas e uma sala do tesouro.', ordem: 5 },
-].map((p) => ({ publicado: true, capa: '', autor: 'Mesa Vortex', criadoEm: 0, ...p }));
+].map((p) => ({ publicado: true, capa: '', autor: 'Fluxo', criadoEm: 0, ...p }));
 
 const fichaSemente = (id, pack, nome, tipo, tamanho, cor, corpo, precisao, essencia, pericias, vida, descricao) => ({
   id, pack, tipo: 'personagem', nome, categoria: tipo, tamanho, cor, corpo, precisao, essencia, pericias, recursos: recVida('Vida', vida), descricao,
@@ -77,4 +77,4 @@ export const ASSETS_SEMENTE = [
       { type: 'prop', x: 105, y: 175, w: 70, h: 35, emoji: '🚪', cor: '#a16207' },
     ],
   },
-].map((a) => ({ autor: 'Mesa Vortex', criadoEm: 0, pasta: PASTA_INICIAL[a.id] || '', ...a }));
+].map((a) => ({ autor: 'Fluxo', criadoEm: 0, pasta: PASTA_INICIAL[a.id] || '', ...a }));

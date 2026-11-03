@@ -1,4 +1,4 @@
-// Paleta da Mesa Vortex
+// Paleta da Fluxo
 export const C = {
   bg: '#0b0912',
   palco: '#07060c',

@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Mesa Vortex",
-    "slug": "mesa-vortex",
-    "scheme": "mesavortex",
+    "name": "Fluxo",
+    "slug": "fluxo",
+    "scheme": "fluxo",
     "version": "1.0.0",
     "orientation": "default",
     "userInterfaceStyle": "dark",
@@ -11,8 +11,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "A Mesa Vortex usa suas fotos para imagens de tokens, objetos e mapas.",
-          "cameraPermission": "A Mesa Vortex usa a câmera para fotografar tokens, objetos e mapas."
+          "photosPermission": "A Fluxo usa suas fotos para imagens de tokens, objetos e mapas.",
+          "cameraPermission": "A Fluxo usa a câmera para fotografar tokens, objetos e mapas."
         }
       ]
     ]
