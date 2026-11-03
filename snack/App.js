@@ -45,7 +45,7 @@ const FERRAMENTAS = [
 // ================================================================
 // src/components/Logo.js
 // ================================================================
-// Identidade visual: hexágono (dado/mesa) com um vórtice no centro
+// Identidade visual: hexágono (dado/mesa) com um vórtice hexagonal no centro
 function Logo({ tamanho = 64, id = 'logo' }) {
   const grad = `url(#${id})`;
   return (
@@ -64,11 +64,12 @@ function Logo({ tamanho = 64, id = 'logo' }) {
         strokeLinejoin="round"
       />
       <Path
-        d="M50 42 A8 8 0 0 1 58 50 A14 14 0 0 1 44 64 A20 20 0 0 1 24 44 A27 27 0 0 1 51 17 A31 31 0 0 1 79 45"
+        d="M50.0 16.0 L77.6 34.0 L75.8 64.9 L50.0 77.8 L27.8 62.8 L29.6 38.2 L50.0 28.5 L66.8 40.3 L65.0 58.7 L50.0 65.3 L38.6 56.6 L40.4 44.5 L50.0 41.0"
         fill="none"
         stroke={grad}
-        strokeWidth="6"
+        strokeWidth="5"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
       <Circle cx="50" cy="50" r="4.5" fill={C.destaque2} />
     </Svg>
